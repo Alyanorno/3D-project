@@ -1,0 +1,25 @@
+#version 330
+
+
+uniform mat4 modelViewMatrix;
+uniform mat3 normalInverseTranspose;
+uniform mat4 projectionMatrix;
+
+layout (location = 0) in vec3 _position;
+layout (location = 1) in vec3 _normal;
+layout (location = 2) in vec2 _textureCoordinate;
+
+out vec3 position;
+out vec3 normal;
+out vec2 textureCoordinate;
+
+
+void main()
+{
+	position = vec3( modelViewMatrix * vec4( _position, 1 ) );
+	normal = normalize( normalInverseTranspose * _normal );
+	textureCoordinate = _textureCoordinate;
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( _position, 1.0 );
+}
+
