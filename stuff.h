@@ -16,7 +16,7 @@
 void Initialize( int argc, char** argv );
 void Update();
 
-
+class exit_success : std::exception {};
 
 struct Texture
 {
@@ -33,7 +33,6 @@ struct Texture
 
 	void LoadBmp( std::string name );
 };
-std::vector< Texture > textures;
 
 struct Model
 {
@@ -48,31 +47,25 @@ struct Model
 	std::vector<float> vertexs, normals, textureCoordinates;
 
 	void LoadObj( std::string name );
-	void Draw();
 };
-std::vector< Model > models;
 
 struct HeightMap
 {
-	void Set( int _width, int _height )
-	{
-	}
 	std::vector< std::vector<float> > heights;
 	float square_size;
 	float x, y, z;
 
 	// graphic part
 	std::vector<float> vertexs, normals, textureCoordinates;
-	std::vector<int> indices;
+	std::vector<unsigned int> indices;
+	GLuint shader;
+	GLuint Vbo[4]; // Vertexs, Normals, Texture Coordinates and Indices
+	GLuint Vao;
 
 	void Load( Texture& t );
-	void Draw();
 };
 
 
 enum ShaderType { Vertex, Fragment, Geometry };
 GLuint LoadShader( std::string name, ShaderType type );
-std::vector< GLuint > shaders;
-
-
 

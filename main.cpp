@@ -6,6 +6,7 @@
 std::ofstream out;
 int main( int argc, char** argv )
 {
+	out.open( "log.txt" );
 	try {
 		Initialize( argc, argv );
 		while( true )
