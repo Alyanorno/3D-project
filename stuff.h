@@ -26,8 +26,8 @@ struct Texture
 		height = _height;
 		t.resize( _size );
 	}
-	char& operator[]( int n ) { return t[n]; }
-	std::vector<char> t;
+	unsigned char& operator[]( int n ) { return t[n]; }
+	std::vector<unsigned char> t;
 	int width, height;
 	GLuint gl;
 

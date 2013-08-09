@@ -64,10 +64,21 @@ void Initialize( int argc, char** argv )
 	glDepthFunc( GL_LESS );
 	glClearColor( 0.5f, 0.5f, 0.5f, 0.5f );
 
-	glm::vec3 eye( 0.f, 0.f, 5.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
+	glm::vec3 eye( 0.f, 500.f, 50.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
 	viewMatrix = glm::lookAt(eye, centre, up);
 
 	height_map.shader = CreateShader( "vertex.shader", "fragment.shader" );
+	height_map.square_size = 1.f;
+	height_map.x = 0.f;
+	height_map.y = 0.f;
+	height_map.z = 0.f;
+
+	Texture t;
+	t.LoadBmp( "heightMap.bmp" );
+	height_map.Load( t );
+
+	textures.push_back( Texture() );
+	textures.back().LoadBmp( "bthBmp.bmp" );
 }
 
 
@@ -100,6 +111,7 @@ void Update()
 	glUniform1fv( glGetUniformLocation( height_map.shader, "lightPosition"), 1, &lightPosition[0] );
 
 	
+	glBindTexture( GL_TEXTURE_2D, textures[0].gl );
 	glBindVertexArray( height_map.Vao);
 	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
 
@@ -108,12 +120,12 @@ void Update()
 	glfwSwapBuffers();
 }
 
-
 void Texture::LoadBmp( std::string name )
 {
 	std::fstream in;
 	in.open( name.c_str(), std::ios::in | std::ios::binary );
-	assert( in.is_open() );
+	if( !in.is_open() )
+		throw std::string( "Failed to open file: " + name );
 
 	unsigned int offset, width, height, size;
 	unsigned short bits_per_pixel;
@@ -140,6 +152,8 @@ void Texture::LoadBmp( std::string name )
 
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, &t[0] );
 }
 
@@ -161,7 +175,8 @@ void Model::LoadObj( std::string name )
 {
 	std::fstream in;
 	in.open( name.c_str(), std::ios::in );
-	assert( in.is_open() );
+	if( !in.is_open() )
+		throw std::string( "Failed to open file: " + name );
 
 	std::vector<float> vertexs, normals, textureCoordinates;
 	std::vector<unsigned int> faces;
@@ -229,48 +244,143 @@ void HeightMap::Load( Texture& t )
 		heights.push_back( std::vector<float>() );
 		heights.back().reserve( t.width );
 		for( int l(0); l < t.width; l++ )
-			heights[i].push_back( t[ i * t.width + l ] );
+		{
+			int temp = (i * t.width + l) * 3; // three channels (rgb)
+			heights[i].push_back( ((unsigned int)t[temp] + (unsigned int)t[temp+1] + (unsigned int)t[temp+2]) / 3.f );
+		}
 	}
 
-	// Calculate vertex positions
+	// Calculate vertex positions and texture coordinates
 	vertexs.reserve( t.width * t.height * 3 );
+	textureCoordinates.reserve( t.height * t.width * 2 );
 	for( int i(0); i < heights.size(); i++ )
 		for( int l(0); l < heights[i].size(); l++ )
 		{
 			vertexs.push_back( x + l * square_size );
 			vertexs.push_back( y + heights[i][l] );
 			vertexs.push_back( z - i * square_size );
+
+			textureCoordinates.push_back( i );
+			textureCoordinates.push_back( l );
 		}
 
-	// Calculate indices, normals and texture coordinates
+	// Calculate normals
+	normals.reserve( (t.width - 1 * 2) * (t.height - 1) * 3 );
+	for( int i(0); i < heights.size(); i++ )
+	{
+		int width = heights[i].size();
+		for( int l(0); l < width; l++ )
+		{
+			int t = (i * width + l) * 3;
+
+			std::vector<float>& v( vertexs );
+
+			bool missing_after = (t + width * 3 > v.size() - 1 ) || (t + 3 >= (i + 1) * width * 3);
+			bool missing_before =  (t - width * 3 <= 0 ) || (t - 3 < i * width * 3);
+			if( !missing_after && !missing_before )
+			{
+				glm::vec3 vec( v[t], v[t+1], v[t+2] );
+				glm::vec3 vec1( v[t-3], v[t-2], v[t-1] );
+				glm::vec3 vec2( v[t-width*3], v[t-width*3+1], v[t-width*3+2] );
+				glm::vec3 vec3( v[t+3], v[t+4], v[t+5] );
+				glm::vec3 vec4( v[t+width*3], v[t+width*3+1], v[t+width*3+2] );
+
+				glm::vec3 t1 = vec1 - vec;
+				glm::vec3 t2 = vec2 - vec;
+				glm::vec3 t3 = vec3 - vec;
+				glm::vec3 t4 = vec4 - vec;
+				glm::vec3 n;
+				if( t1 == t2 && t3 == t4 )
+					n = glm::vec3( 0.f, 1.f, 0.f );
+				else if( t1 == t2 )
+					n = glm::cross( t3, t4 );
+				else if( t3 == t4 )
+					n = glm::cross( t1, t2 );
+				else
+					n = (glm::cross( vec1 - vec, vec2 - vec ) + glm::cross( vec3 - vec, vec4 - vec )) / 2.f;
+
+				if( n == glm::vec3( 0.f, 0.f, 0.f ) )
+					n = glm::vec3( 0.f, 1.f, 0.f );
+				else
+					n = glm::normalize( n );
+
+				normals.push_back( n[0] );
+				normals.push_back( n[1] );
+				normals.push_back( n[2] );
+			}
+			else if( !missing_after )
+			{
+				glm::vec3 vec( v[t], v[t+1], v[t+2] );
+				glm::vec3 vec1( v[t+3], v[t+4], v[t+5] );
+				glm::vec3 vec2( v[t+width*3], v[t+width*3+1], v[t+width*3+2] );
+
+				glm::vec3 t1 = vec1 - vec;
+				glm::vec3 t2 = vec2 - vec;
+				glm::vec3 n;
+				if( t1 == t2 )
+					n = glm::vec3( 0.f, 1.f, 0.f );
+				else
+					n = glm::cross( t1, t2 );
+
+				if( n == glm::vec3( 0.f, 0.f, 0.f ) )
+					n = glm::vec3( 0.f, 1.f, 0.f );
+				else
+					n = glm::normalize( n );
+
+				normals.push_back( n[0] );
+				normals.push_back( n[1] );
+				normals.push_back( n[2] );
+			}
+			else if( !missing_before )
+			{
+				glm::vec3 vec( v[t], v[t+1], v[t+2] );
+				glm::vec3 vec1( v[t-3], v[t-2], v[t-1] );
+				glm::vec3 vec2( v[t-width*3], v[t-width*3+1], v[t-width*3+2] );
+
+				glm::vec3 t1 = vec1 - vec;
+				glm::vec3 t2 = vec2 - vec;
+				glm::vec3 n;
+				if( t1 == t2 )
+					n = glm::vec3( 0.f, 1.f, 0.f );
+				else
+					n = glm::cross( t1, t2 );
+
+				if( n == glm::vec3( 0.f, 0.f, 0.f ) )
+					n = glm::vec3( 0.f, 1.f, 0.f );
+				else
+					n = glm::normalize( n );
+
+				normals.push_back( n[0] );
+				normals.push_back( n[1] );
+				normals.push_back( n[2] );
+			}
+			else
+			{
+				normals.push_back( 0.f );
+				normals.push_back( 1.f );
+				normals.push_back( 0.f );
+			}
+		}
+	}
+
+	// Calculate indices
 	// Upperst and lowest is width * 2, the rest requres 2 indices per point so (height-2) * width * 2 and then plus extra for restart drawing number + height - 1
 	indices.reserve( t.width * 2 + (t.height - 2) * t.width * 2 + t.height - 1 );
-	normals.reserve( (t.width - 1 * 2) * (t.height - 1) * 3 );
-	//textureCoordinates.reserve();
-	// TODO: Calculate normals and texture coordinates
 	for( int i(0); i < t.height - 1; i++ )
 	{
 		if( i != 0 )
 			indices.push_back( restart_number );
-		indices.push_back( i );
-		indices.push_back( i + t.width );
-		indices.push_back( i + 1 );
+		indices.push_back( i * t.width );
+		indices.push_back( i * t.width + t.width );
+		indices.push_back( i * t.width + 1 );
 
-		// TODO: Calc n tc
+		indices.push_back( i * t.width + t.width + 1 );
 
-		indices.push_back( i + t.width + 1 );
-
-		// TODO: Calc n tc
-
-		for( int l(1); l < t.width; l++ )
+		for( int l(2); l < t.width; l++ )
 		{
-			indices.push_back( i + l );
+			indices.push_back( i * t.width + l );
 
-			// TODO: Calc n tc
-
-			indices.push_back( i + t.width + l + 1 );
-
-			// TODO: Calc n tc
+			indices.push_back( i * t.width + t.width + l );
 		}
 	}
 
@@ -300,13 +410,13 @@ void HeightMap::Load( Texture& t )
 
 	GLubyte* null = 0;
 
-	glBindBuffer(GL_ARRAY_BUFFER, Vbo[0]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Vbo[0]);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, null);
 
-	glBindBuffer(GL_ARRAY_BUFFER, Vbo[1]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Vbo[1]);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, null);
 
-	glBindBuffer(GL_ARRAY_BUFFER, Vbo[2]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Vbo[2]);
 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, null);
 }
 
