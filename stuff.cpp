@@ -5,8 +5,8 @@ std::vector< Texture > textures;
 std::vector< Model > models;
 HeightMap height_map;
 
-const int restart_number = 30000;
-glm::mat4 viewMatrix( glm::mat4( 1.f ) );
+GLuint restart_number = 100000;
+glm::vec3 translation( 0.f, 0.f, 0.f ), rotation( 0.f, 0.f, 0.f );
 
 
 GLuint CreateShader( std::string vertex, std::string fragment )
@@ -41,9 +41,9 @@ void Initialize( int argc, char** argv )
 
 	glfwInit();
 
-	glfwOpenWindowHint(GLFW_OPENGL_VERSION_MAJOR, 3);
-	glfwOpenWindowHint(GLFW_OPENGL_VERSION_MINOR, 3);
-	glfwOpenWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwOpenWindowHint( GLFW_OPENGL_VERSION_MAJOR, 3 );
+	glfwOpenWindowHint( GLFW_OPENGL_VERSION_MINOR, 3 );
+	glfwOpenWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE );
 
 	glfwOpenWindow( 800, 600, 0, 0, 0, 0, 0, 0, GLFW_WINDOW );
 
@@ -58,20 +58,17 @@ void Initialize( int argc, char** argv )
 	glEnable( GL_PRIMITIVE_RESTART );
 
 	glPrimitiveRestartIndex( restart_number );
-	glCullFace( GL_BACK );
+	glCullFace( GL_FRONT );
 	glFrontFace( GL_CCW );
 	glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 	glDepthFunc( GL_LESS );
-	glClearColor( 0.5f, 0.5f, 0.5f, 0.5f );
+	glClearColor( 0.5f, 0.5f, 0.5f, 1.f );
 
-	glm::vec3 eye( 0.f, 500.f, 50.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
-	viewMatrix = glm::lookAt(eye, centre, up);
+//	glm::vec3 eye( 0.f, 200.f, -300.f ), centre( 0.f, 0.f, 0.0f ), up( 0.f, 1.f, 0.f );
+//	viewMatrix = glm::lookAt(eye, centre, up);
 
 	height_map.shader = CreateShader( "vertex.shader", "fragment.shader" );
-	height_map.square_size = 1.f;
-	height_map.x = 0.f;
-	height_map.y = 0.f;
-	height_map.z = 0.f;
+	height_map.square_size = 10.f;
 
 	Texture t;
 	t.LoadBmp( "heightMap.bmp" );
@@ -84,24 +81,81 @@ void Initialize( int argc, char** argv )
 
 void Update()
 {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	// Input stuff
+	if( glfwGetKey( GLFW_KEY_ESC ) )
+		throw exit_success();
 
+	int m_x, m_y;
+	glfwGetMousePos( &m_x, &m_y );
 
 	int width, height;
 	glfwGetWindowSize( &width, &height );
-	static float angle = 45; // degres
-	angle += 0.01f;
-	if( angle > 360 )
-		angle = 0;
+
+	glm::mat4 viewMatrix( glm::mat4( 1.f ) );
+	// Rotate camera depending on mouse pos
+	if( m_x > width / 2 || m_x < width / 2 )
+	{
+		rotation.y += (m_x - width / 2) * 0.1f;
+	}
+	if( m_y > height / 2 || m_y < height / 2 )
+	{
+		rotation.x += (m_y - height / 2) * 0.1f;
+	}
+	glfwSetMousePos( width / 2, height / 2 );
+	viewMatrix = glm::rotate( viewMatrix, rotation.x, glm::vec3( 1.f, 0.f, 0.f ) );
+	viewMatrix = glm::rotate( viewMatrix, rotation.y, glm::vec3( 0.f, 1.f, 0.f ) );
+	viewMatrix = glm::rotate( viewMatrix, rotation.z, glm::vec3( 0.f, 0.f, 1.f ) );
+
+	if( glfwGetKey('W') && glfwGetKey('S') )
+	{}
+	else if( glfwGetKey('W') )
+	{
+		glm::vec4 t( 0.f, 0.f, 1.f, 1.f );
+		t = t * viewMatrix;
+		translation.x += t.x;
+		translation.y += t.y;
+		translation.z += t.z;
+	}
+	else if( glfwGetKey('S') )
+	{
+		glm::vec4 t( 0.f, 0.f, 1.f, 1.f );
+		t = t * viewMatrix;
+		translation.x -= t.x;
+		translation.y -= t.y;
+		translation.z -= t.z;
+	}
+	if( glfwGetKey('A') && glfwGetKey('D') )
+	{}
+	else if( glfwGetKey('A') )
+	{
+		glm::vec4 t( 1.f, 0.f, 0.f, 1.f );
+		t = t * viewMatrix;
+		translation.x += t.x;
+		translation.y += t.y;
+		translation.z += t.z;
+	}
+	else if( glfwGetKey('D') )
+	{
+		glm::vec4 t( 1.f, 0.f, 0.f, 1.f );
+		t = t * viewMatrix;
+		translation.x -= t.x;
+		translation.y -= t.y;
+		translation.z -= t.z;
+	}
+	viewMatrix = glm::translate( viewMatrix, translation );
+
+
+	// Draw stuff
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+
 	glm::mat4 modelMatrix( glm::mat4( 1.0f ) );
 	float nearClip = 1.0f, farClip = 1000.0f, fovDeg = 45.0f, aspect = (float)width / (float)height;
-	modelMatrix = glm::rotate( modelMatrix, angle, glm::vec3( 0.0f, 1.0f, 0.0f ) );
-
 
 	glm::mat4 modelViewMatrix = viewMatrix * modelMatrix;
 	glm::mat3 normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
 	glm::mat4 projectionMatrix = glm::perspective(fovDeg, aspect, nearClip, farClip);
-	glm::vec4 lightPosition = viewMatrix * glm::vec4( -1.f, 10.f, 0.f, 1.f );
+	glm::vec4 lightPosition = viewMatrix * glm::vec4( 0.f, 400.f, 0.f, 1.f );
 
 
 	glUseProgram( height_map.shader );
@@ -110,12 +164,18 @@ void Update()
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniform1fv( glGetUniformLocation( height_map.shader, "lightPosition"), 1, &lightPosition[0] );
 
-	
+
 	glBindTexture( GL_TEXTURE_2D, textures[0].gl );
-	glBindVertexArray( height_map.Vao);
+	glBindVertexArray( height_map.Vao );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[3] );
+
 	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
 
-	
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
+	glBindTexture( GL_TEXTURE_2D, 0 );
+
+
 	glUseProgram(0);
 	glfwSwapBuffers();
 }
@@ -249,20 +309,34 @@ void HeightMap::Load( Texture& t )
 			heights[i].push_back( ((unsigned int)t[temp] + (unsigned int)t[temp+1] + (unsigned int)t[temp+2]) / 3.f );
 		}
 	}
+	x = - (heights.size() * square_size * 0.5);
+	y = 0.f;
+	z = heights.size() * square_size * 0.5;
+
 
 	// Calculate vertex positions and texture coordinates
 	vertexs.reserve( t.width * t.height * 3 );
 	textureCoordinates.reserve( t.height * t.width * 2 );
-	for( int i(0); i < heights.size(); i++ )
-		for( int l(0); l < heights[i].size(); l++ )
+	std::vector< std::vector<float> >& h( heights );
+	for( int i(0); i < h.size(); i++ )
+	{
+		for( int l(0); l < h[i].size(); l++ )
 		{
+			// Smoothing
+			if( i != 0 && i != h.size() - 1 )
+				if( l != 0 && l != h[i].size() - 1 )
+				{
+					h[i][l] = (h[i][l] + h[i][l+1] + h[i][l-1] + h[i+1][l] + h[i+1][l+1] + h[i+1][l-1] + h[i-1][l] + h[i-1][l+1] + h[i-1][l-1]) / 9.f;
+				}
+
 			vertexs.push_back( x + l * square_size );
-			vertexs.push_back( y + heights[i][l] );
+			vertexs.push_back( y + h[i][l] );
 			vertexs.push_back( z - i * square_size );
 
 			textureCoordinates.push_back( i );
 			textureCoordinates.push_back( l );
 		}
+	}
 
 	// Calculate normals
 	normals.reserve( (t.width - 1 * 2) * (t.height - 1) * 3 );
@@ -304,9 +378,9 @@ void HeightMap::Load( Texture& t )
 				else
 					n = glm::normalize( n );
 
-				normals.push_back( n[0] );
-				normals.push_back( n[1] );
-				normals.push_back( n[2] );
+				normals.push_back( n.x );
+				normals.push_back( n.y );
+				normals.push_back( n.z );
 			}
 			else if( !missing_after )
 			{
@@ -327,9 +401,9 @@ void HeightMap::Load( Texture& t )
 				else
 					n = glm::normalize( n );
 
-				normals.push_back( n[0] );
-				normals.push_back( n[1] );
-				normals.push_back( n[2] );
+				normals.push_back( n.x );
+				normals.push_back( n.y );
+				normals.push_back( n.z );
 			}
 			else if( !missing_before )
 			{
@@ -350,9 +424,9 @@ void HeightMap::Load( Texture& t )
 				else
 					n = glm::normalize( n );
 
-				normals.push_back( n[0] );
-				normals.push_back( n[1] );
-				normals.push_back( n[2] );
+				normals.push_back( n.x );
+				normals.push_back( n.y );
+				normals.push_back( n.z );
 			}
 			else
 			{
@@ -396,28 +470,31 @@ void HeightMap::Load( Texture& t )
 	glBindBuffer( GL_ARRAY_BUFFER, Vbo[2] );
 	glBufferData( GL_ARRAY_BUFFER, textureCoordinates.size() * sizeof(float), &textureCoordinates[0], GL_STATIC_DRAW );
 
-	glBindBuffer( GL_ARRAY_BUFFER, Vbo[3] );
-	glBufferData( GL_ARRAY_BUFFER, indices.size() * sizeof(int), &indices[0], GL_STATIC_DRAW );
-
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Vbo[3] );
+	glBufferData( GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(int), &indices[0], GL_STATIC_DRAW );
 
 	glGenVertexArrays( 1, &Vao );
 	glBindVertexArray( Vao );
 
 	// Vertex, normal, texture
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
+	glEnableVertexAttribArray( 0 );
+	glEnableVertexAttribArray( 1 );
+	glEnableVertexAttribArray( 2 );
+	//glEnableVertexAttribArray( 3 );
 
-	GLubyte* null = 0;
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[0] );
+	glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, 0 );
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Vbo[0]);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, null);
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[1] );
+	glVertexAttribPointer( 1, 3, GL_FLOAT, GL_FALSE, 0, 0 );
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Vbo[1]);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, null);
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[2] );
+	glVertexAttribPointer( 2, 2, GL_FLOAT, GL_FALSE, 0, 0 );
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Vbo[2]);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, null);
+
+	glBindBuffer( GL_ARRAY_BUFFER, 0 );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
 }
 
 

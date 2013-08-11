@@ -57,7 +57,7 @@ struct HeightMap
 
 	// graphic part
 	std::vector<float> vertexs, normals, textureCoordinates;
-	std::vector<unsigned int> indices;
+	std::vector<GLuint> indices;
 	GLuint shader;
 	GLuint Vbo[4]; // Vertexs, Normals, Texture Coordinates and Indices
 	GLuint Vao;

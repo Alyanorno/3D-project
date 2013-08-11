@@ -26,5 +26,6 @@ void main() {
 	vec3 specularLight = vec3( specular ) * pow( max( dot( reflect( -s, normal ), normalize( -position ) ), 0.0 ), shininess);
 
 	fragmentColour = texture2D( textureSampler, textureCoordinate ) * vec4( ambientLight + diffuseLight + specularLight, 1.0 );
+	//fragmentColour = vec4( 1.0, 0.0, 0.0, 1.0 );
 }
 
