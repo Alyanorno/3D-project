@@ -57,7 +57,6 @@ struct HeightMap
 	int size() { return heights.size(); }
 	std::vector< std::vector<float> > heights;
 	float square_size;
-	float x, y, z;
 
 	// graphic part
 	std::vector<float> vertexs, normals, textureCoordinates;
@@ -66,6 +65,8 @@ struct HeightMap
 	GLuint Vbo[4]; // Vertexs, Normals, Texture Coordinates and Indices
 	GLuint Vao;
 
+	int width() { return heights[0].size(); }
+	int height() { return heights.size(); }
 	void Load( Texture& t );
 };
 
@@ -86,7 +87,7 @@ struct ParticleSystem : public Policy
 		glEnableVertexAttribArray( 0 );
 
 		glBindBuffer( GL_ARRAY_BUFFER, Vbo );
-		glVertexAttribPointer( 0, 1, GL_FLOAT, GL_FALSE, 0, 0 );
+		glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, 0 );
 
 		glBindBuffer( GL_ARRAY_BUFFER, 0 );
 		glBindVertexArray( 0 );
@@ -125,24 +126,27 @@ struct ParticleSystem : public Policy
 struct Snow
 {
 	Snow() : range( -100, 100 )
-	{}
+	{
+		std::random_device t;
+		number_generator.seed( t() );
+	}
 	glm::vec3 AddParticle( glm::vec3 _direction )
 	{
-		return glm::vec3( range( number_generator ), 10.f, range( number_generator ) );
+		return position + glm::vec3( range( number_generator ), 0, range( number_generator ) );
 	}
 	bool Remove( int _i, glm::vec3 _position )
 	{
-		if( _position.y < 0 )
+		if( _position.y < -100 )
 			return true;
 		else
 			return false;
 	}
 	void Update( glm::vec3& _position )
 	{
-		_position -= glm::vec3( 0.f, 0.001f, 0.f );
+		_position += glm::vec3( 0.f, -0.1f, 0.f );
 	}
 
-	std::default_random_engine number_generator;
+	std::mt19937 number_generator;
 	std::uniform_real_distribution<float> range;
 	glm::vec3 position;
 };

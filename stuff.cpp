@@ -59,7 +59,7 @@ void Initialize( int argc, char** argv )
 	glfwSetWindowTitle( "Hej!" );
 
 	glEnable( GL_DEPTH_TEST );
-	glEnable( GL_CULL_FACE );
+	//glEnable( GL_CULL_FACE );
 	glEnable( GL_BLEND );
 	glEnable( GL_PRIMITIVE_RESTART );
 
@@ -78,7 +78,7 @@ void Initialize( int argc, char** argv )
 	height_map.Load( t );
 
 	snow.shader = CreateShader( "particles.vertex", "particles.fragment", "particles.geometry" );
-	snow.position = glm::vec3( 0, 0, 0 );
+	snow.position = glm::vec3( 0.f, 100.f, 0.f );
 	snow.particle_size = 1.f;
 
 	snow.Load();
@@ -88,14 +88,8 @@ void Initialize( int argc, char** argv )
 
 	textures.push_back( Texture() );
 	textures[1].LoadBmp( "particle.bmp" );
-
-	translation += glm::vec3( 100.f, 100.f, 10.f ); // temp
 }
 
-float DistanceSquared( float _x, float _y, float __x, float __y )
-{
-	return (__x - _x) * (__x - _x) + (__y - _y) * (__y - _y);
-}
 void Update()
 {
 	snow.Emit( 1 );
@@ -111,15 +105,18 @@ void Update()
 	glfwGetWindowSize( &width, &height );
 
 	// Rotate camera depending on mouse pos
-	if( m_x > width / 2 || m_x < width / 2 )
+	if( !glfwGetKey( GLFW_KEY_LCTRL ) )
 	{
-		rotation.y += (m_x - width / 2) * 0.1f;
+		if( m_x > width / 2 || m_x < width / 2 )
+		{
+			rotation.y += (m_x - width / 2) * 0.1f;
+		}
+		if( m_y > height / 2 || m_y < height / 2 )
+		{
+			rotation.x += (m_y - height / 2) * 0.1f;
+		}
+		glfwSetMousePos( width / 2, height / 2 );
 	}
-	if( m_y > height / 2 || m_y < height / 2 )
-	{
-		rotation.x += (m_y - height / 2) * 0.1f;
-	}
-	glfwSetMousePos( width / 2, height / 2 );
 
 	glm::mat4 viewMatrix( glm::mat4( 1.f ) );
 	viewMatrix = glm::rotate( viewMatrix, rotation.x, glm::vec3( 1.f, 0.f, 0.f ) );
@@ -164,53 +161,48 @@ void Update()
 		translation.z -= t.z;
 	}
 
+	static bool lock_space = false;
+	if( glfwGetKey( GLFW_KEY_SPACE ) )
+	{
+		if( !lock_space )
+			translation.y -= 10.f;
+		lock_space = true;
+	}
+	else
+		lock_space = false;
+
+	//translation.x -= 0.8f;
+	//translation.z += 0.5f;
+
 	// TODO: Calculate y coordinate depending on height map
-	float map_x, map_z;
+	int map_x, map_z;
 	float square_size = height_map.square_size;
-	map_z = -(height_map.x + translation.x) / square_size;
-	map_x = (height_map.z + translation.z) / square_size;
-	if( map_x > 0 && map_x < height_map.size() - 1 )
-		if( map_z > 0 && map_z < height_map[0].size() - 1 )
+	map_x = (height_map.height() * square_size * 0.5 + translation.x) / square_size;
+	map_z = (height_map.width() * square_size * 0.5 - translation.z) / square_size;
+	if( map_x > 0 && map_x < height_map.height() - 1 )
+		if( map_z > 0 && map_z < height_map.width() - 1 )
 		{
-			// Calculate distance to the four nearest points
-			float x = map_x - int(map_x / square_size) * square_size;
-			float z = map_z - int(map_z / square_size) * square_size;
-			std::vector<float> d;
-			d.push_back( DistanceSquared( x, z, 0, 0 ) );
-			d.push_back( DistanceSquared( x, z, 0, square_size ) );
-			d.push_back( DistanceSquared( x, z, square_size, 0 ) );
-			d.push_back( DistanceSquared( x, z, square_size, square_size ) );
+			std::vector<float>& v( height_map.vertexs );
+			int pos = map_z * height_map.width() + map_x;
+			pos *= 3;
+			glm::vec3 v0 = glm::vec3( v[pos+0], v[pos+1], v[pos+2] );
+			glm::vec3 v1 = glm::vec3( v[pos+3], v[pos+4], v[pos+5] );
+			pos += height_map[0].size() * 3;
+			glm::vec3 v2 = glm::vec3( v[pos+0], v[pos+1], v[pos+2] );
 
-			// Remove the point furthest away
-			int t;
-			float distance(0);
-			for( int i(0); i < d.size(); i++ )
-				if( d[i] > distance )
-				{
-					distance = d[i];
-					t = i;
-				}
+			glm::vec3 n = glm::cross( v2 - v0, v1 - v0 );
+			n = glm::normalize( n );
 
-			// Calculate the weighted average the rest of the points
-			float total = 0;
-			for( int i(0); i < d.size(); i++ )
-				if( t != i )
-					total += d[i];
-			for( int i(0); i < d.size(); i++ )
-				if( t != i )
-					d[i] = d[i] / total;
+			float tx = n.x * ( translation.x - v0.x );
+			float tz = n.z * ( translation.z - v0.z );
+//			float y = ( n.x * ( translation.x - v0.x ) + n.z * ( translation.z - v0.z ) ) / - n.y + v0.y;
 
-			float weighted_average = 0;
-			if( t != 0 )
-				weighted_average += height_map[map_x][map_z] * d[0];
-			if( t != 1 )
-				weighted_average += height_map[map_x][map_z+1] * d[1];
-			if( t != 2 )
-				weighted_average += height_map[map_x+1][map_z] * d[2];
-			if( t != 3 )
-				weighted_average += height_map[map_x+1][map_z+1] * d[3];
+			float y = ( tx + tz ) / -n.y + v0.y;
+	//		float d = - glm::dot( translation - v0, normal ) / glm::dot( glm::vec3( 0, 1, 0 ), normal );
+	//		float p = translation.y + d * 1;
 
-			translation.y = -weighted_average - height_map.y - 5.f;
+			if( translation.y > -y - 5.f - 5.f )
+				translation.y = - y - 5.f;
 		}
 	viewMatrix = glm::translate( viewMatrix, translation );
 
@@ -256,13 +248,8 @@ void Update()
 	// Draw particle system Snow
 	glEnableVertexAttribArray( 0 );
 
-	glm::mat4 modelMatrix( glm::mat4( 1.0f ) );
-	modelMatrix = glm::translate( modelMatrix, snow.position );
-
-	modelViewMatrix = viewMatrix * modelMatrix;
-
 	glUseProgram( snow.shader );
-	glUniformMatrix4fv( glGetUniformLocation( snow.shader, "modelViewMatrix" ), 1, GL_FALSE, &modelViewMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( snow.shader, "viewMatrix" ), 1, GL_FALSE, &viewMatrix[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( snow.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniform1fv( glGetUniformLocation( snow.shader, "size"), 1, &snow.particle_size );
 
@@ -411,12 +398,12 @@ void HeightMap::Load( Texture& t )
 			heights[i].push_back( ((unsigned int)t[temp] + (unsigned int)t[temp+1] + (unsigned int)t[temp+2]) / 3.f );
 		}
 	}
-	x = - (heights.size() * square_size * 0.5);
-	y = 0.f;
-	z = heights.size() * square_size * 0.5;
 
 
 	// Calculate vertex positions and texture coordinates
+	float x = - (heights.size() * square_size * 0.5);
+	float y = 0.f;
+	float z = heights.size() * square_size * 0.5;
 	vertexs.reserve( t.width * t.height * 3 );
 	textureCoordinates.reserve( t.height * t.width * 2 );
 	std::vector< std::vector<float> >& h( heights );

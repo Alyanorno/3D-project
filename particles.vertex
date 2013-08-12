@@ -1,11 +1,10 @@
 #version 330
 
-
-uniform mat4 modelViewMatrix;
+uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 
-layout (location = 0) in vec3 _position;
-layout (location = 1) in vec2 _textureCoordinate;
+in vec3 _position;
+in vec2 _textureCoordinate;
 
 out vec3 position;
 out vec2 textureCoordinate;
@@ -13,10 +12,9 @@ out vec2 textureCoordinate;
 
 void main()
 {
-	position = vec3( modelViewMatrix * vec4( _position, 1 ) );
+	position = _position;
 	textureCoordinate = _textureCoordinate;
 
-	gl_Position = projectionMatrix * modelViewMatrix * vec4( _position, 1.0 );
-	//gl_Position = modelViewMatrix * vec4( _position, 1.0 );
+	gl_Position = projectionMatrix * viewMatrix * vec4( _position, 1.0 );
 }
 
