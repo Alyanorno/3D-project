@@ -2,8 +2,10 @@
 
 uniform vec4 lightPosition;
 uniform sampler2D textureSampler;
+uniform sampler2D shadowMap;
 
 in vec3 position;
+out vec3 shadowCoordinate;
 in vec3 normal;
 in vec2 textureCoordinate; 
 
@@ -25,7 +27,13 @@ void main() {
 	float shininess = 1;
 	vec3 specularLight = vec3( specular ) * pow( max( dot( reflect( -s, normal ), normalize( -position ) ), 0.0 ), shininess);
 
-	fragmentColour = texture2D( textureSampler, textureCoordinate ) * vec4( ambientLight + diffuseLight + specularLight, 1.0 );
-	//fragmentColour = vec4( 1.0, 0.0, 0.0, 1.0 );
+	// shadow
+	float visible = 1.0;
+	if( texture( shadowMap, shadowCoordinate.xy ).z < shadowCoordinate.z )
+	{
+		visible = 0.5;
+	}
+
+	fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible, 1.0 );
 }
 

@@ -45,14 +45,21 @@ struct Model
 		normals.resize( number * 3 );
 		textureCoordinates.resize( number * 2 );
 	}
+	void LoadObj( std::string name );
+
 	int number;
 	std::vector<float> vertexs, normals, textureCoordinates;
 
-	void LoadObj( std::string name );
+	glm::vec3 position;
+	GLuint shader;
+	GLuint Vao;
+	GLuint Vbo[3]; // Vertexs, Normals and  Texture Coordinates
 };
 
 struct HeightMap
 {
+	void Load( Texture& t );
+
 	std::vector<float>& operator[]( int i ) { return heights[i]; }
 	int size() { return heights.size(); }
 	std::vector< std::vector<float> > heights;
@@ -67,7 +74,6 @@ struct HeightMap
 
 	int width() { return heights[0].size(); }
 	int height() { return heights.size(); }
-	void Load( Texture& t );
 };
 
 template < int max_size, class Policy >

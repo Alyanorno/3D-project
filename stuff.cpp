@@ -2,12 +2,21 @@
 
 
 std::vector< Texture > textures;
-std::vector< Model > models;
+Model model;
 HeightMap height_map;
 ParticleSystem< 10000, Snow > snow;
 
+struct
+{
+	GLuint texture;
+	GLuint shader;
+	int width, height;
+	GLuint framebuffer;
+} shadow;
+
 GLuint restart_number = 100000;
 glm::vec3 translation( 0.f, 0.f, 0.f ), rotation( 0.f, 0.f, 0.f );
+
 
 
 GLuint CreateShader( std::string vertex, std::string fragment, std::string geometry = "" )
@@ -43,8 +52,6 @@ GLuint CreateShader( std::string vertex, std::string fragment, std::string geome
 }
 void Initialize( int argc, char** argv )
 {
-	GLuint Vao;
-
 	glfwInit();
 
 	glfwOpenWindowHint( GLFW_OPENGL_VERSION_MAJOR, 3 );
@@ -59,17 +66,47 @@ void Initialize( int argc, char** argv )
 	glfwSetWindowTitle( "Hej!" );
 
 	glEnable( GL_DEPTH_TEST );
-	//glEnable( GL_CULL_FACE );
+	glEnable( GL_CULL_FACE );
 	glEnable( GL_BLEND );
 	glEnable( GL_PRIMITIVE_RESTART );
 
 	glPrimitiveRestartIndex( restart_number );
-	glCullFace( GL_FRONT );
+	glCullFace( GL_BACK );
 	glFrontFace( GL_CCW );
 	glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 	glDepthFunc( GL_LESS );
 	glClearColor( 0.5f, 0.5f, 0.5f, 1.f );
 
+
+	shadow.width = 1024;
+	shadow.height = 1024;
+
+	glGenFramebuffers( 1, &shadow.framebuffer );
+	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
+
+	glDrawBuffer( GL_NONE ); // No color
+
+	glGenTextures( 1, &shadow.texture );
+	glBindTexture( GL_TEXTURE_2D, shadow.texture );
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadow.width, shadow.height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+
+	glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadow.texture, 0 );
+
+	if( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
+		throw std::string( "Failed to initialize shadow map" );
+
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+
+	shadow.shader = CreateShader( "shadow.vertex", "shadow.fragment" );
+
+
+	model.position = glm::vec3( 50.f, 75.f, 0.f );
+	model.LoadObj( "bth.obj" );
+	model.shader = CreateShader( "height_map.vertex", "height_map.fragment" );
 	height_map.shader = CreateShader( "height_map.vertex", "height_map.fragment" );
 	height_map.square_size = 10.f;
 
@@ -207,7 +244,93 @@ void Update()
 	viewMatrix = glm::translate( viewMatrix, translation );
 
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+	// Draw to Shadow Map
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+	glm::vec3 eye( 0.f, 1.f, 0.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
+	glm::mat4 shadowProjectionViewMatrix = glm::lookAt(eye, centre, up) * glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f );
+
+	glEnableVertexAttribArray( 0 );
+	glCullFace( GL_FRONT );
+
+	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
+	glUseProgram( shadow.shader );
+
+	glUniformMatrix4fv( glGetUniformLocation( shadow.shader, "projectionViewMatrix" ), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
+
+	glBindVertexArray( model.Vao );
+	glDrawArrays( GL_TRIANGLES, 0, model.vertexs.size() );
+	glBindVertexArray( 0 );
+
+	glBindVertexArray( height_map.Vao );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[3] );
+	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
+
+	glUseProgram( 0 );
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+
+	glCullFace( GL_BACK );
+	glDisableVertexAttribArray( 0 );
+
+
+
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+
+	// Move from [-1,1] -> [0,1]
+	shadowProjectionViewMatrix = glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f ) * shadowProjectionViewMatrix;
+	float nearClip = 1.0f, farClip = 1000.f, fovDeg = 45.f, aspect = (float)width / (float)height;
+	glm::mat4 modelViewMatrix;
+	glm::mat3 normalInverseTranspose;
+	glm::mat4 projectionMatrix = glm::perspective(fovDeg, aspect, nearClip, farClip);
+	glm::vec4 lightPosition = viewMatrix * glm::vec4( 0.f, 300.f, 0.0f, 1.0f );
+
+
+	//Draw Model
+	glEnableVertexAttribArray( 0 );
+	glEnableVertexAttribArray( 1 );
+	glEnableVertexAttribArray( 2 );
+
+	static float angle = 45; // degres
+	angle += 0.1f;
+	if( angle > 360 )
+		angle = 0;
+	glm::mat4 modelMatrix( glm::mat4( 1.0f ) );
+	modelMatrix = glm::translate( modelMatrix, model.position );
+	modelMatrix = glm::rotate( modelMatrix, angle, glm::vec3( 0.f, 1.f, 0.f ) );
+
+	modelViewMatrix = viewMatrix * modelMatrix;
+	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
+
+	glUseProgram( model.shader );
+	glUniformMatrix4fv( glGetUniformLocation( model.shader, "modelViewMatrix" ), 1, GL_FALSE, &modelViewMatrix[0][0] );
+	glUniformMatrix3fv( glGetUniformLocation( model.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( model.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( model.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
+	glUniform1fv( glGetUniformLocation( model.shader, "lightPosition"), 1, &lightPosition[0] );
+
+	glUniform1i( glGetUniformLocation( model.shader, "textureSampler" ), 0 );
+	glUniform1i( glGetUniformLocation( model.shader, "shadowMap" ), 1 );
+
+	glActiveTexture( GL_TEXTURE0 + 0 );
+	glBindTexture( GL_TEXTURE_2D, textures[0].gl );
+	glActiveTexture( GL_TEXTURE0 + 1 );
+	glBindTexture( GL_TEXTURE_2D, shadow.texture );
+
+	glBindVertexArray( model.Vao );
+
+	glDrawArrays( GL_TRIANGLES, 0, model.vertexs.size() );
+
+	glBindVertexArray( 0 );
+	glBindTexture( GL_TEXTURE_2D, 0 );
+	glUseProgram(0);
+
+	glDisableVertexAttribArray( 2 );
+	glDisableVertexAttribArray( 1 );
+	glDisableVertexAttribArray( 0 );
 
 
 	// Draw Height Map
@@ -215,20 +338,24 @@ void Update()
 	glEnableVertexAttribArray( 1 );
 	glEnableVertexAttribArray( 2 );
 
-	float nearClip = 1.0f, farClip = 1000.0f, fovDeg = 45.0f, aspect = (float)width / (float)height;
-
-	glm::mat4 modelViewMatrix = viewMatrix;
-	glm::mat3 normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
-	glm::mat4 projectionMatrix = glm::perspective(fovDeg, aspect, nearClip, farClip);
-	glm::vec4 lightPosition = viewMatrix * glm::vec4( 0.f, 400.f, 0.f, 1.f );
+	modelViewMatrix = viewMatrix;
+	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
 
 	glUseProgram( height_map.shader );
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "modelViewMatrix" ), 1, GL_FALSE, &modelViewMatrix[0][0] );
 	glUniformMatrix3fv( glGetUniformLocation( height_map.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( model.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
 	glUniform1fv( glGetUniformLocation( height_map.shader, "lightPosition"), 1, &lightPosition[0] );
 
+	glUniform1i( glGetUniformLocation( height_map.shader, "textureSampler" ), 0 );
+	glUniform1i( glGetUniformLocation( height_map.shader, "shadowMap" ), 1 );
+
+	glActiveTexture( GL_TEXTURE0 + 0 );
 	glBindTexture( GL_TEXTURE_2D, textures[0].gl );
+	glActiveTexture( GL_TEXTURE0 + 1 );
+	glBindTexture( GL_TEXTURE_2D, shadow.texture );
+
 	glBindVertexArray( height_map.Vao );
 	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[3] );
 
@@ -244,7 +371,6 @@ void Update()
 	glDisableVertexAttribArray( 0 );
 
 
-
 	// Draw particle system Snow
 	glEnableVertexAttribArray( 0 );
 
@@ -253,6 +379,9 @@ void Update()
 	glUniformMatrix4fv( glGetUniformLocation( snow.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniform1fv( glGetUniformLocation( snow.shader, "size"), 1, &snow.particle_size );
 
+	glUniform1i( glGetUniformLocation( model.shader, "textureSampler" ), 0 );
+
+	glActiveTexture( GL_TEXTURE0 + 0 );
 	glBindTexture( GL_TEXTURE_2D, textures[1].gl );
 	glBindVertexArray( snow.Vao );
 
@@ -327,7 +456,7 @@ void Model::LoadObj( std::string name )
 	if( !in.is_open() )
 		throw std::string( "Failed to open file: " + name );
 
-	std::vector<float> vertexs, normals, textureCoordinates;
+	std::vector<float> t_vertexs, t_normals, t_textureCoordinates;
 	std::vector<unsigned int> faces;
 
 	while( !in.eof() )
@@ -344,15 +473,15 @@ void Model::LoadObj( std::string name )
 			if( line[1] == 't' )
 				// Texture Coordinate
 				for( int i(1); i < t.size(); i++ )
-					textureCoordinates.push_back( To< float >( t[i] ) );
+					t_textureCoordinates.push_back( To< float >( t[i] ) );
 			else if( line[1] == 'n' )
 				// Normal
 				for( int i(1); i < t.size(); i++ )
-					normals.push_back( To< float >( t[i] ) );
+					t_normals.push_back( To< float >( t[i] ) );
 			else
 				// Vertex
 				for( int i(1); i < t.size(); i++ )
-					vertexs.push_back( To< float >( t[i] ) );
+					t_vertexs.push_back( To< float >( t[i] ) );
 		} else if( line[0] == 'f' ) {
 			// Face
 			std::vector< std::string > t;
@@ -365,7 +494,6 @@ void Model::LoadObj( std::string name )
 					faces.push_back( To< unsigned int >( y[j] ) );
 			}
 		}
-		// TODO: Add code to also store material groups
 	}
 
 	in.close();
@@ -375,14 +503,48 @@ void Model::LoadObj( std::string name )
 	{
 		for( int j(0); j < 3; j++ )
 		{
-			vertexs[ i * 3 + j ] = vertexs[ ( faces[ i * 3 + 0 ] - 1 ) * 3 + j ];
+			vertexs[ i * 3 + j ] = t_vertexs[ ( faces[ i * 3 + 0 ] - 1 ) * 3 + j ];
 			normals[ i * 3 + j ] = normals[ ( faces[ i * 3 + 2 ] - 1 ) * 3 + j ];
 		}
 		for( int j(0); j < 2; j++ )
-			textureCoordinates[ i * 2 + j ] = textureCoordinates[ ( faces[ i * 3 + 1 ] - 1 ) * 2 + j ];
+			textureCoordinates[ i * 2 + j ] = t_textureCoordinates[ ( faces[ i * 3 + 1 ] - 1 ) * 2 + j ];
 	}
 
-	// TODO: load .mtl file
+	glGenBuffers( 3, Vbo );
+
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[0] );
+	glBufferData( GL_ARRAY_BUFFER, vertexs.size() * sizeof(float), &vertexs[0], GL_STATIC_DRAW );
+
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[1] );
+	glBufferData( GL_ARRAY_BUFFER, normals.size() * sizeof(float), &normals[0], GL_STATIC_DRAW );
+
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[2] );
+	glBufferData( GL_ARRAY_BUFFER, textureCoordinates.size() * sizeof(float), &textureCoordinates[0], GL_STATIC_DRAW );
+
+
+	glGenVertexArrays( 1, &Vao );
+	glBindVertexArray( Vao );
+
+	// Vertex, normal, texture
+	glEnableVertexAttribArray( 0 );
+	glEnableVertexAttribArray( 1 );
+	glEnableVertexAttribArray( 2 );
+
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[0] );
+	glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, 0 );
+
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[1] );
+	glVertexAttribPointer( 1, 3, GL_FLOAT, GL_FALSE, 0, 0 );
+
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[2] );
+	glVertexAttribPointer( 2, 2, GL_FLOAT, GL_FALSE, 0, 0 );
+
+	glBindBuffer( GL_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
+
+	glDisableVertexAttribArray( 2 );
+	glDisableVertexAttribArray( 1 );
+	glDisableVertexAttribArray( 0 );
 }
 
 void HeightMap::Load( Texture& t )
@@ -534,16 +696,16 @@ void HeightMap::Load( Texture& t )
 		if( i != 0 )
 			indices.push_back( restart_number );
 		indices.push_back( i * t.width );
-		indices.push_back( i * t.width + t.width );
 		indices.push_back( i * t.width + 1 );
+		indices.push_back( i * t.width + t.width );
 
 		indices.push_back( i * t.width + t.width + 1 );
 
 		for( int l(2); l < t.width; l++ )
 		{
-			indices.push_back( i * t.width + l );
-
 			indices.push_back( i * t.width + t.width + l );
+
+			indices.push_back( i * t.width + l );
 		}
 	}
 
@@ -623,7 +785,7 @@ GLuint LoadShader( std::string name, ShaderType type )
 		char* error = new char[l];
 		glGetShaderInfoLog( shader, l, &t, error );
 		std::cout << std::endl << error;
-		std::string err( error );
+		std::string err( "Error in " + name + ": " + error );
 		delete error;
 		throw err;
 	}
