@@ -5,7 +5,7 @@ uniform sampler2D textureSampler;
 uniform sampler2D shadowMap;
 
 in vec3 position;
-out vec3 shadowCoordinate;
+in vec3 shadowCoordinate;
 in vec3 normal;
 in vec2 textureCoordinate; 
 
@@ -34,6 +34,8 @@ void main() {
 		visible = 0.5;
 	}
 
+	float fogFactor = clamp( ( gl_FragCoord.z / gl_FragCoord.w ) / 1000.0, 0.0, 1.0 );
 	fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible, 1.0 );
+	fragmentColour.xyz = fragmentColour.xyz * ( 1 - fogFactor ) + glm::vec3( 1.0, 1.0, 1.0 ) * fogFactor;
 }
 

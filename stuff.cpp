@@ -155,10 +155,10 @@ void Update()
 		glfwSetMousePos( width / 2, height / 2 );
 	}
 
-	glm::mat4 viewMatrix( glm::mat4( 1.f ) );
-	viewMatrix = glm::rotate( viewMatrix, rotation.x, glm::vec3( 1.f, 0.f, 0.f ) );
-	viewMatrix = glm::rotate( viewMatrix, rotation.y, glm::vec3( 0.f, 1.f, 0.f ) );
-	viewMatrix = glm::rotate( viewMatrix, rotation.z, glm::vec3( 0.f, 0.f, 1.f ) );
+	glm::mat4 rotationMatrix( glm::mat4( 1.f ) );
+	rotationMatrix = glm::rotate( rotationMatrix, rotation.x, glm::vec3( 1.f, 0.f, 0.f ) );
+	rotationMatrix = glm::rotate( rotationMatrix, rotation.y, glm::vec3( 0.f, 1.f, 0.f ) );
+	rotationMatrix = glm::rotate( rotationMatrix, rotation.z, glm::vec3( 0.f, 0.f, 1.f ) );
 
 	float speed = 0.2f;
 	if( glfwGetKey('W') && glfwGetKey('S') )
@@ -166,7 +166,7 @@ void Update()
 	else if( glfwGetKey('W') )
 	{
 		glm::vec4 t( 0.f, 0.f, 1.f, 1.f );
-		t = t * viewMatrix * speed;
+		t = t * rotationMatrix * speed;
 		translation.x += t.x;
 		translation.y += t.y;
 		translation.z += t.z;
@@ -174,7 +174,7 @@ void Update()
 	else if( glfwGetKey('S') )
 	{
 		glm::vec4 t( 0.f, 0.f, 1.f, 1.f );
-		t = t * viewMatrix * speed;
+		t = t * rotationMatrix * speed;
 		translation.x -= t.x;
 		translation.y -= t.y;
 		translation.z -= t.z;
@@ -184,7 +184,7 @@ void Update()
 	else if( glfwGetKey('A') )
 	{
 		glm::vec4 t( 1.f, 0.f, 0.f, 1.f );
-		t = t * viewMatrix * speed;
+		t = t * rotationMatrix * speed;
 		translation.x += t.x;
 		translation.y += t.y;
 		translation.z += t.z;
@@ -192,7 +192,7 @@ void Update()
 	else if( glfwGetKey('D') )
 	{
 		glm::vec4 t( 1.f, 0.f, 0.f, 1.f );
-		t = t * viewMatrix * speed;
+		t = t * rotationMatrix * speed;
 		translation.x -= t.x;
 		translation.y -= t.y;
 		translation.z -= t.z;
@@ -211,7 +211,8 @@ void Update()
 	//translation.x -= 0.8f;
 	//translation.z += 0.5f;
 
-	// TODO: Calculate y coordinate depending on height map
+	// TODO: Fix, doesnt work for some reason
+	// Calculate y coordinate depending on height map
 	int map_x, map_z;
 	float square_size = height_map.square_size;
 	map_x = (height_map.height() * square_size * 0.5 + translation.x) / square_size;
@@ -241,15 +242,17 @@ void Update()
 			if( translation.y > -y - 5.f - 5.f )
 				translation.y = - y - 5.f;
 		}
-	viewMatrix = glm::translate( viewMatrix, translation );
 
+
+	glm::mat4 viewMatrix( glm::mat4( 1.f ) );
+	viewMatrix = rotationMatrix * glm::translate( viewMatrix, translation );
 
 
 	// Draw to Shadow Map
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	glm::vec3 eye( 0.f, 1.f, 0.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
-	glm::mat4 shadowProjectionViewMatrix = glm::lookAt(eye, centre, up) * glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f );
+	glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( viewMatrix * glm::vec4( eye, 1.f ) ), centre, up );
 
 	glEnableVertexAttribArray( 0 );
 	glCullFace( GL_FRONT );
@@ -281,7 +284,7 @@ void Update()
 
 
 	// Move from [-1,1] -> [0,1]
-	shadowProjectionViewMatrix = glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f ) * shadowProjectionViewMatrix;
+	shadowProjectionViewMatrix =  shadowProjectionViewMatrix * glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f );
 	float nearClip = 1.0f, farClip = 1000.f, fovDeg = 45.f, aspect = (float)width / (float)height;
 	glm::mat4 modelViewMatrix;
 	glm::mat3 normalInverseTranspose;
