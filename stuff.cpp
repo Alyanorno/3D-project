@@ -507,7 +507,7 @@ void Model::LoadObj( std::string name )
 		for( int j(0); j < 3; j++ )
 		{
 			vertexs[ i * 3 + j ] = t_vertexs[ ( faces[ i * 3 + 0 ] - 1 ) * 3 + j ];
-			normals[ i * 3 + j ] = normals[ ( faces[ i * 3 + 2 ] - 1 ) * 3 + j ];
+			normals[ i * 3 + j ] = t_normals[ ( faces[ i * 3 + 2 ] - 1 ) * 3 + j ];
 		}
 		for( int j(0); j < 2; j++ )
 			textureCoordinates[ i * 2 + j ] = t_textureCoordinates[ ( faces[ i * 3 + 1 ] - 1 ) * 2 + j ];
