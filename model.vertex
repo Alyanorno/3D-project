@@ -9,13 +9,11 @@ uniform mat4 shadowProjectionViewMatrix;
 layout (location = 0) in vec3 _position;
 layout (location = 1) in vec3 _normal;
 layout (location = 2) in vec2 _textureCoordinate;
-layout (location = 3) in vec3 _textureBlending;
 
 out vec3 position;
 out vec4 shadowCoordinate;
 out vec3 normal;
 out vec2 textureCoordinate;
-out vec3 textureBlending;
 
 
 void main()
@@ -24,7 +22,6 @@ void main()
 	shadowCoordinate = shadowProjectionViewMatrix * vec4( _position, 1 );
 	normal = normalize( normalInverseTranspose * _normal );
 	textureCoordinate = _textureCoordinate;
-	textureBlending = _textureBlending;
 
 	gl_Position = projectionMatrix * modelViewMatrix * vec4( _position, 1.0 );
 }

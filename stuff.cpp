@@ -1,3 +1,4 @@
+
 #include "stuff.h"
 
 
@@ -106,13 +107,11 @@ void Initialize( int argc, char** argv )
 
 	model.position = glm::vec3( 50.f, 75.f, 0.f );
 	model.LoadObj( "bth.obj" );
-	model.shader = CreateShader( "height_map.vertex", "height_map.fragment" );
+	model.shader = CreateShader( "model.vertex", "model.fragment" );
 	height_map.shader = CreateShader( "height_map.vertex", "height_map.fragment" );
 	height_map.square_size = 10.f;
 
-	Texture t;
-	t.LoadBmp( "heightMap.bmp" );
-	height_map.Load( t );
+	height_map.Load( Texture( "heightMap.bmp" ), Texture( "blendMap.bmp" ) );
 
 	snow.shader = CreateShader( "particles.vertex", "particles.fragment", "particles.geometry" );
 	snow.position = glm::vec3( 0.f, 100.f, 0.f );
@@ -124,7 +123,10 @@ void Initialize( int argc, char** argv )
 	textures[0].LoadBmp( "bthBmp.bmp" );
 
 	textures.push_back( Texture() );
-	textures[1].LoadBmp( "particle.bmp" );
+	textures[1].LoadBmp( "texture2.bmp" );
+
+	textures.push_back( Texture() );
+	textures[2].LoadBmp( "particle.bmp" );
 }
 
 void Update()
@@ -208,15 +210,11 @@ void Update()
 	else
 		lock_space = false;
 
-	//translation.x -= 0.8f;
-	//translation.z += 0.5f;
-
-	// TODO: Fix, doesnt work for some reason
 	// Calculate y coordinate depending on height map
 	int map_x, map_z;
 	float square_size = height_map.square_size;
-	map_x = (height_map.height() * square_size * 0.5 + translation.x) / square_size;
-	map_z = (height_map.width() * square_size * 0.5 - translation.z) / square_size;
+	map_x = (height_map.height() * square_size * 0.5 - translation.x) / square_size;
+	map_z = (height_map.width() * square_size * 0.5 + translation.z) / square_size;
 	if( map_x > 0 && map_x < height_map.height() - 1 )
 		if( map_z > 0 && map_z < height_map.width() - 1 )
 		{
@@ -231,8 +229,8 @@ void Update()
 			glm::vec3 n = glm::cross( v2 - v0, v1 - v0 );
 			n = glm::normalize( n );
 
-			float tx = n.x * ( translation.x - v0.x );
-			float tz = n.z * ( translation.z - v0.z );
+			float tx = n.x * ( -translation.x - v0.x );
+			float tz = n.z * ( -translation.z - v0.z );
 //			float y = ( n.x * ( translation.x - v0.x ) + n.z * ( translation.z - v0.z ) ) / - n.y + v0.y;
 
 			float y = ( tx + tz ) / -n.y + v0.y;
@@ -251,11 +249,11 @@ void Update()
 	// Draw to Shadow Map
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
-	glm::vec3 eye( 0.f, 1.f, 0.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
-	glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( viewMatrix * glm::vec4( eye, 1.f ) ), centre, up );
+	glm::vec3 eye( 0.f, 100.f, 0.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
+	glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( glm::vec4( eye, 1.f ) * viewMatrix ), centre, up );
 
 	glEnableVertexAttribArray( 0 );
-	glCullFace( GL_FRONT );
+	glCullFace( GL_FRONT_AND_BACK );
 
 	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
 	glUseProgram( shadow.shader );
@@ -267,7 +265,7 @@ void Update()
 	glBindVertexArray( 0 );
 
 	glBindVertexArray( height_map.Vao );
-	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[3] );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[4] );
 	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
 	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
 	glBindVertexArray( 0 );
@@ -279,17 +277,17 @@ void Update()
 	glDisableVertexAttribArray( 0 );
 
 
-
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-
 
 	// Move from [-1,1] -> [0,1]
 	shadowProjectionViewMatrix =  shadowProjectionViewMatrix * glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f );
+	// Move to camera space
+	shadowProjectionViewMatrix = glm::inverse( shadowProjectionViewMatrix ) * viewMatrix;
 	float nearClip = 1.0f, farClip = 1000.f, fovDeg = 45.f, aspect = (float)width / (float)height;
 	glm::mat4 modelViewMatrix;
 	glm::mat3 normalInverseTranspose;
 	glm::mat4 projectionMatrix = glm::perspective(fovDeg, aspect, nearClip, farClip);
-	glm::vec4 lightPosition = viewMatrix * glm::vec4( 0.f, 300.f, 0.0f, 1.0f );
+	glm::vec4 lightPosition = glm::vec4( 0.f, 300.f, 0.f, 1.f );
 
 
 	//Draw Model
@@ -313,7 +311,7 @@ void Update()
 	glUniformMatrix3fv( glGetUniformLocation( model.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( model.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( model.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
-	glUniform1fv( glGetUniformLocation( model.shader, "lightPosition"), 1, &lightPosition[0] );
+	glUniform1fv( glGetUniformLocation( model.shader, "lightPosition"), 3, &lightPosition[0] );
 
 	glUniform1i( glGetUniformLocation( model.shader, "textureSampler" ), 0 );
 	glUniform1i( glGetUniformLocation( model.shader, "shadowMap" ), 1 );
@@ -340,6 +338,7 @@ void Update()
 	glEnableVertexAttribArray( 0 );
 	glEnableVertexAttribArray( 1 );
 	glEnableVertexAttribArray( 2 );
+	glEnableVertexAttribArray( 3 );
 
 	modelViewMatrix = viewMatrix;
 	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
@@ -349,18 +348,21 @@ void Update()
 	glUniformMatrix3fv( glGetUniformLocation( height_map.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( model.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
-	glUniform1fv( glGetUniformLocation( height_map.shader, "lightPosition"), 1, &lightPosition[0] );
+	glUniform1fv( glGetUniformLocation( height_map.shader, "lightPosition"), 3, &lightPosition[0] );
 
 	glUniform1i( glGetUniformLocation( height_map.shader, "textureSampler" ), 0 );
-	glUniform1i( glGetUniformLocation( height_map.shader, "shadowMap" ), 1 );
+	glUniform1i( glGetUniformLocation( height_map.shader, "textureSampler2" ), 1 );
+	glUniform1i( glGetUniformLocation( height_map.shader, "shadowMap" ), 2 );
 
 	glActiveTexture( GL_TEXTURE0 + 0 );
 	glBindTexture( GL_TEXTURE_2D, textures[0].gl );
 	glActiveTexture( GL_TEXTURE0 + 1 );
+	glBindTexture( GL_TEXTURE_2D, textures[1].gl );
+	glActiveTexture( GL_TEXTURE0 + 2 );
 	glBindTexture( GL_TEXTURE_2D, shadow.texture );
 
 	glBindVertexArray( height_map.Vao );
-	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[3] );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[4] );
 
 	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
 
@@ -369,6 +371,7 @@ void Update()
 	glBindTexture( GL_TEXTURE_2D, 0 );
 	glUseProgram(0);
 
+	glDisableVertexAttribArray( 3 );
 	glDisableVertexAttribArray( 2 );
 	glDisableVertexAttribArray( 1 );
 	glDisableVertexAttribArray( 0 );
@@ -385,7 +388,7 @@ void Update()
 	glUniform1i( glGetUniformLocation( model.shader, "textureSampler" ), 0 );
 
 	glActiveTexture( GL_TEXTURE0 + 0 );
-	glBindTexture( GL_TEXTURE_2D, textures[1].gl );
+	glBindTexture( GL_TEXTURE_2D, textures[2].gl );
 	glBindVertexArray( snow.Vao );
 
 	glDrawArrays( GL_POINTS, 0, snow.size );
@@ -400,7 +403,7 @@ void Update()
 	glfwSwapBuffers();
 }
 
-void Texture::LoadBmp( std::string name )
+void Texture::LoadBmp( std::string name, bool toGraphicCard )
 {
 	std::fstream in;
 	in.open( name.c_str(), std::ios::in | std::ios::binary );
@@ -428,14 +431,17 @@ void Texture::LoadBmp( std::string name )
 
 	in.close();
 
-	glGenTextures( 1, &gl );
-	glBindTexture( GL_TEXTURE_2D, gl );
+	if( toGraphicCard )
+	{
+		glGenTextures( 1, &gl );
+		glBindTexture( GL_TEXTURE_2D, gl );
 
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, &t[0] );
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, &t[0] );
+	}
 }
 
 
@@ -550,9 +556,12 @@ void Model::LoadObj( std::string name )
 	glDisableVertexAttribArray( 0 );
 }
 
-void HeightMap::Load( Texture& t )
+void HeightMap::Load( Texture& t, Texture& blending )
 {
+	if( t.height != blending.height || t.width != blending.width )
+		throw std::string( "Error when loading heightmap, incorrect blending map proportions" );
 	heights.reserve( t.height );
+	textureBlending.reserve( t.height * t.width * 3 );
 	for( int i(0); i < t.height; i++ )
 	{
 		heights.push_back( std::vector<float>() );
@@ -561,6 +570,9 @@ void HeightMap::Load( Texture& t )
 		{
 			int temp = (i * t.width + l) * 3; // three channels (rgb)
 			heights[i].push_back( ((unsigned int)t[temp] + (unsigned int)t[temp+1] + (unsigned int)t[temp+2]) / 3.f );
+			textureBlending.push_back( (float)blending[temp+0] / 256 );
+			textureBlending.push_back( (float)blending[temp+1] / 256 );
+			textureBlending.push_back( (float)blending[temp+2] / 256 );
 		}
 	}
 
@@ -713,7 +725,7 @@ void HeightMap::Load( Texture& t )
 	}
 
 
-	glGenBuffers( 4, Vbo );
+	glGenBuffers( 5, Vbo );
 
 	glBindBuffer( GL_ARRAY_BUFFER, Vbo[0] );
 	glBufferData( GL_ARRAY_BUFFER, vertexs.size() * sizeof(float), &vertexs[0], GL_STATIC_DRAW );
@@ -724,7 +736,10 @@ void HeightMap::Load( Texture& t )
 	glBindBuffer( GL_ARRAY_BUFFER, Vbo[2] );
 	glBufferData( GL_ARRAY_BUFFER, textureCoordinates.size() * sizeof(float), &textureCoordinates[0], GL_STATIC_DRAW );
 
-	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Vbo[3] );
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[3] );
+	glBufferData( GL_ARRAY_BUFFER, textureBlending.size() * sizeof(float), &textureBlending[0], GL_STATIC_DRAW );
+
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Vbo[4] );
 	glBufferData( GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(int), &indices[0], GL_STATIC_DRAW );
 
 	glGenVertexArrays( 1, &Vao );
@@ -734,6 +749,7 @@ void HeightMap::Load( Texture& t )
 	glEnableVertexAttribArray( 0 );
 	glEnableVertexAttribArray( 1 );
 	glEnableVertexAttribArray( 2 );
+	glEnableVertexAttribArray( 3 );
 
 	glBindBuffer( GL_ARRAY_BUFFER, Vbo[0] );
 	glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, 0 );
@@ -744,11 +760,15 @@ void HeightMap::Load( Texture& t )
 	glBindBuffer( GL_ARRAY_BUFFER, Vbo[2] );
 	glVertexAttribPointer( 2, 2, GL_FLOAT, GL_FALSE, 0, 0 );
 
+	glBindBuffer( GL_ARRAY_BUFFER, Vbo[3] );
+	glVertexAttribPointer( 3, 3, GL_FLOAT, GL_FALSE, 0, 0 );
+
 
 	glBindBuffer( GL_ARRAY_BUFFER, 0 );
 	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
 	glBindVertexArray( 0 );
 
+	glDisableVertexAttribArray( 3 );
 	glDisableVertexAttribArray( 2 );
 	glDisableVertexAttribArray( 1 );
 	glDisableVertexAttribArray( 0 );

@@ -1,19 +1,15 @@
 #version 330
 
-
 uniform vec3 lightPosition;
 uniform sampler2D textureSampler;
-uniform sampler2D textureSampler2;
 uniform sampler2D shadowMap;
 
 in vec3 position;
 in vec4 shadowCoordinate;
 in vec3 normal;
 in vec2 textureCoordinate; 
-in vec3 textureBlending;
 
 out vec4 fragmentColour;
-
 
 void main() {
 	vec3 s = normalize( lightPosition - position );
@@ -45,11 +41,9 @@ void main() {
 	}
 
 	float fogFactor = clamp( ( gl_FragCoord.z / gl_FragCoord.w ) / 1000.0, 0.0, 1.0 );
-	//fragmentColour = texture( textureSampler, textureCoordinate );
-	fragmentColour = texture( textureSampler, textureCoordinate ) * ( 1 - textureBlending.x ) + texture( textureSampler2, textureCoordinate ) * textureBlending.x;
-	fragmentColour = fragmentColour * vec4( (ambientLight + diffuseLight + specularLight), 1.0 );
+	fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight), 1.0 );
 	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible, 1.0 );
-	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible + vec3( 1.0, 0.0, 0.0 ) * ( 1 - visible ), 1.0 );
-	fragmentColour.xyz = fragmentColour.xyz * ( 1 - fogFactor ) + vec3( 1.0, 1.0, 1.0 ) * fogFactor;
+	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible + glm::vec3( 1.0, 0.0, 0.0 ) * ( 1 - visible ), 1.0 );
+	fragmentColour.xyz = fragmentColour.xyz * ( 1 - fogFactor ) + glm::vec3( 1.0, 1.0, 1.0 ) * fogFactor;
 }
 

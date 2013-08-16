@@ -22,6 +22,9 @@ class exit_success : std::exception {};
 
 struct Texture
 {
+	Texture() {}
+	Texture( std::string _name )
+		{ LoadBmp( _name, false ); }
 	void Set( int _size, int _width, int _height )
 	{
 		width = _width;
@@ -33,7 +36,7 @@ struct Texture
 	int width, height;
 	GLuint gl;
 
-	void LoadBmp( std::string name );
+	void LoadBmp( std::string name, bool toGraphicCard = true );
 };
 
 struct Model
@@ -58,7 +61,7 @@ struct Model
 
 struct HeightMap
 {
-	void Load( Texture& t );
+	void Load( Texture& t, Texture& blending );
 
 	std::vector<float>& operator[]( int i ) { return heights[i]; }
 	int size() { return heights.size(); }
@@ -66,10 +69,10 @@ struct HeightMap
 	float square_size;
 
 	// graphic part
-	std::vector<float> vertexs, normals, textureCoordinates;
+	std::vector<float> vertexs, normals, textureCoordinates, textureBlending;
 	std::vector<GLuint> indices;
 	GLuint shader;
-	GLuint Vbo[4]; // Vertexs, Normals, Texture Coordinates and Indices
+	GLuint Vbo[5]; // Vertexs, Normals, Texture Coordinates, Texture Blending and Indices
 	GLuint Vao;
 
 	int width() { return heights[0].size(); }
