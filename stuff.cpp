@@ -15,6 +15,15 @@ struct
 	GLuint framebuffer;
 } shadow;
 
+struct
+{
+	GLuint texture;
+	GLuint shader;
+	GLuint Vao, Vbo[2];
+	int size;
+} skyBox;
+
+
 GLuint restart_number = 100000;
 glm::vec3 translation( 0.f, 0.f, 0.f ), rotation( 0.f, 0.f, 0.f );
 
@@ -69,6 +78,8 @@ void Initialize( int argc, char** argv )
 	glEnable( GL_DEPTH_TEST );
 	glEnable( GL_CULL_FACE );
 	glEnable( GL_BLEND );
+	glEnable( GL_TEXTURE_CUBE_MAP );
+	glEnable( GL_TEXTURE_CUBE_MAP_SEAMLESS );
 	glEnable( GL_PRIMITIVE_RESTART );
 
 	glPrimitiveRestartIndex( restart_number );
@@ -127,6 +138,81 @@ void Initialize( int argc, char** argv )
 
 	textures.push_back( Texture() );
 	textures[2].LoadBmp( "particle.bmp" );
+
+
+	// Load sky box
+	skyBox.shader = CreateShader( "skyBox.vertex", "skyBox.fragment" );
+
+	std::string names[] = { "skyBoxLeft.bmp", "skyBoxRight.bmp", "skyBoxTop.bmp", "skyBoxBottom.bmp", "skyBoxFront.bmp", "skyBoxBack.bmp" };
+	int i = 6;
+
+	glGenTextures( 1, &skyBox.texture );
+	glBindTexture( GL_TEXTURE_CUBE_MAP, skyBox.texture );
+
+#define TABLE \
+	FOO( GL_TEXTURE_CUBE_MAP_NEGATIVE_Z ); \
+	FOO( GL_TEXTURE_CUBE_MAP_POSITIVE_Z ); \
+	FOO( GL_TEXTURE_CUBE_MAP_NEGATIVE_Y ); \
+	FOO( GL_TEXTURE_CUBE_MAP_POSITIVE_Y ); \
+	FOO( GL_TEXTURE_CUBE_MAP_NEGATIVE_X ); \
+	FOO( GL_TEXTURE_CUBE_MAP_POSITIVE_X ); \
+
+#define FOO( TYPE ) \
+	textures.push_back( Texture( names[--i] ) ); \
+	glTexImage2D( TYPE, 0, GL_RGB8, textures.back().width, textures.back().height, 0, GL_BGR, GL_UNSIGNED_BYTE, &textures.back().t[0] );
+
+	TABLE
+
+#undef FOO
+#undef TABLE
+
+	glTexParameteri( GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+
+	float vertexs[] = 
+	{
+		-1.0f, -1.0f, 1.0f,
+		1.0f, -1.0f, 1.0f,
+		1.0f, 1.0f, 1.0f,
+		-1.0f, 1.0f, 1.0f,
+		-1.0f, -1.0f, -1.0f,
+		1.0f, -1.0f, -1.0f,
+		1.0f, 1.0f, -1.0f,
+		-1.0f, 1.0f, -1.0,
+	};
+
+	GLuint indices[] =
+	{
+		0, 1, 2, 2, 3, 0, 
+		3, 2, 6, 6, 7, 3, 
+		7, 6, 5, 5, 4, 7, 
+		4, 0, 3, 3, 7, 4, 
+		0, 1, 5, 5, 4, 0,
+		1, 5, 6, 6, 2, 1,
+	};
+	skyBox.size = sizeof(indices) / sizeof(GLuint);
+
+	glGenBuffers( 2, skyBox.Vbo );
+
+	glBindBuffer( GL_ARRAY_BUFFER, skyBox.Vbo[0] );
+	glBufferData( GL_ARRAY_BUFFER, sizeof(vertexs), &vertexs[0], GL_STATIC_DRAW );
+
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, skyBox.Vbo[1] );
+	glBufferData( GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), &indices[0], GL_STATIC_DRAW );
+
+	glGenVertexArrays( 1, &skyBox.Vao );
+	glBindVertexArray( skyBox.Vao );
+
+	glEnableVertexAttribArray( 0 );
+
+	glBindBuffer( GL_ARRAY_BUFFER, skyBox.Vbo[0] );
+	glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, 0 );
+
+	glBindBuffer( GL_ARRAY_BUFFER, 0 );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
+
+	glDisableVertexAttribArray( 0 );
 }
 
 void Update()
@@ -347,7 +433,7 @@ void Update()
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "modelViewMatrix" ), 1, GL_FALSE, &modelViewMatrix[0][0] );
 	glUniformMatrix3fv( glGetUniformLocation( height_map.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
-	glUniformMatrix4fv( glGetUniformLocation( model.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
 	glUniform1fv( glGetUniformLocation( height_map.shader, "lightPosition"), 3, &lightPosition[0] );
 
 	glUniform1i( glGetUniformLocation( height_map.shader, "textureSampler" ), 0 );
@@ -385,9 +471,9 @@ void Update()
 	glUniformMatrix4fv( glGetUniformLocation( snow.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniform1fv( glGetUniformLocation( snow.shader, "size"), 1, &snow.particle_size );
 
-	glUniform1i( glGetUniformLocation( model.shader, "textureSampler" ), 0 );
+	glUniform1i( glGetUniformLocation( snow.shader, "textureSampler" ), 0 );
 
-	glActiveTexture( GL_TEXTURE0 + 0 );
+	glActiveTexture( GL_TEXTURE0 );
 	glBindTexture( GL_TEXTURE_2D, textures[2].gl );
 	glBindVertexArray( snow.Vao );
 
@@ -398,6 +484,39 @@ void Update()
 	glUseProgram(0);
 
 	glDisableVertexAttribArray( 0 );
+
+
+	// Draw sky box
+	glEnableVertexAttribArray( 0 );
+	glCullFace( GL_FRONT );
+	glDepthFunc( GL_LEQUAL );
+
+	modelViewMatrix = viewMatrix;
+	glm::mat4 projectionViewMatrix( glm::mat4( 1.0f ) );
+	projectionViewMatrix = projectionMatrix * rotationMatrix;
+
+	glUseProgram( skyBox.shader );
+	glUniformMatrix4fv( glGetUniformLocation( skyBox.shader, "projectionViewMatrix"), 1, GL_FALSE, &projectionViewMatrix[0][0] );
+
+	glUniform1i( glGetUniformLocation( skyBox.shader, "textureSampler" ), 0 );
+
+	glActiveTexture( GL_TEXTURE0 );
+	glBindTexture( GL_TEXTURE_CUBE_MAP, skyBox.texture );
+
+	glBindVertexArray( skyBox.Vao );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, skyBox.Vbo[1] );
+
+	glDrawElements( GL_TRIANGLES, skyBox.size, GL_UNSIGNED_INT, 0 );
+
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
+	glBindTexture( GL_TEXTURE_2D, 0 );
+	glUseProgram(0);
+
+	glDepthFunc( GL_LESS );
+	glCullFace( GL_BACK );
+	glDisableVertexAttribArray( 0 );
+
 
 
 	glfwSwapBuffers();

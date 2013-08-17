@@ -1,0 +1,14 @@
+#version 330
+
+
+uniform samplerCube textureSampler;
+
+in vec3 textureCoordinate;
+
+out vec4 fragmentColour;
+
+
+void main() {
+	fragmentColour = texture( textureSampler, textureCoordinate );
+}
+
