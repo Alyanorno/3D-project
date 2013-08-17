@@ -46,9 +46,9 @@ void main() {
 
 	float fogFactor = clamp( ( gl_FragCoord.z / gl_FragCoord.w ) / 1000.0, 0.0, 1.0 );
 	fragmentColour = texture( textureSampler, textureCoordinate ) * ( 1 - textureBlending.x ) + texture( textureSampler2, textureCoordinate ) * textureBlending.x;
-	fragmentColour = fragmentColour * vec4( (ambientLight + diffuseLight + specularLight), 1.0 );
+	//fragmentColour = fragmentColour * vec4( (ambientLight + diffuseLight + specularLight), 1.0 );
 	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible, 1.0 );
-	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible + vec3( 1.0, 0.0, 0.0 ) * ( 1 - visible ), 1.0 );
+	fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible + vec3( 1.0, 0.0, 0.0 ) * ( 1 - visible ), 1.0 );
 	fragmentColour.xyz = fragmentColour.xyz * ( 1 - fogFactor ) + vec3( 1.0, 1.0, 1.0 ) * fogFactor;
 }
 

@@ -108,17 +108,19 @@ struct ParticleSystem : public Policy
 		if( size + amount > max_size )
 			amount = max_size - size;
 		for( int i(0); i < amount; i++ )
-			positions[ i + size ] = Policy::AddParticle( direction );
+			positions[ i + size ] = Policy::AddParticle( i + size, direction );
 		size += amount;
 	}
 	void Update() 
 	{
 		for( int i(0); i < size; i++ )
-			if( !Policy::Remove( i, positions[i] ) )
-				Policy::Update( positions[i] );
-			else
+			if( Policy::Remove( i, positions[i] ) )
+			{
 				positions[i] = positions[--size];
+				Policy::Move( i, size );
+			}
 
+		Policy::Update( positions, size );
 		// TODO: Find better way to do this
 		glBindBuffer( GL_ARRAY_BUFFER, Vbo );
 		glBufferData( GL_ARRAY_BUFFER, max_size * 3 * sizeof(float), &positions[0], GL_DYNAMIC_DRAW );
@@ -139,7 +141,7 @@ struct Snow
 		std::random_device t;
 		number_generator.seed( t() );
 	}
-	glm::vec3 AddParticle( glm::vec3 _direction )
+	glm::vec3 AddParticle( int _i, glm::vec3 _direction )
 	{
 		return position + glm::vec3( range( number_generator ), 0, range( number_generator ) );
 	}
@@ -150,14 +152,129 @@ struct Snow
 		else
 			return false;
 	}
-	void Update( glm::vec3& _position )
+	void Move( int _to, int _from )
+	{}
+	void Update( glm::vec3 _positions[], int _size )
 	{
-		_position += glm::vec3( 0.f, -0.1f, 0.f );
+		for( int i(0); i < _size; i++ )
+			_positions[i] += glm::vec3( 0.f, -0.1f, 0.f );
 	}
 
 	std::mt19937 number_generator;
 	std::uniform_real_distribution<float> range;
 	glm::vec3 position;
+};
+
+static const int fire_max_size = 1000;
+struct Fire
+{
+	Fire() : range( -1, 1 )
+	{
+		std::random_device t;
+		number_generator.seed( t() );
+	}
+	glm::vec3 AddParticle( int _i, glm::vec3 _direction )
+	{
+		directions[_i] = glm::normalize( glm::vec3( range( number_generator ), range( number_generator ), range( number_generator ) ) ) / 10.f;
+		return position + glm::vec3( range( number_generator ), 0, range( number_generator ) );
+	}
+	float L( float x ) { return x > 0 ? x: -x; }
+	float L( glm::vec3 x ) { return glm::dot( x, x ); }
+	bool Remove( int _i, glm::vec3 _position )
+	{
+		int max = 75;
+		if( L( _position.x - position.x ) < -max || L( _position.x - position.x ) > max )
+			return true;
+		else if( L( _position.y - position.y ) < -max || L( _position.y - position.y ) > max )
+			return true;
+		else if( L( _position.z - position.z ) < -max || L( _position.z - position.z ) > max )
+			return true;
+		else
+			return false;
+	}
+	void Move( int _to, int _from )
+	{
+		directions[_to] = directions[_from];
+	}
+	void Update( glm::vec3 _positions[], int _size )
+	{
+		for( int i(0); i < _size; i++ )
+		{
+			// Alignment
+			glm::vec3 alignment( 0.f, 0.f, 0.f );
+			float alignment_count(0);
+			// Cohesion
+			glm::vec3 cohesion( 0.f, 0.f, 0.f );
+			float cohesion_count(0);
+			// Separation
+			glm::vec3 separation( 0.f, 0.f, 0.f );
+			float separation_count(0);
+
+			int l = i - 50;
+			l = l < 0 ? 0: l;
+			int stop = i + 50;
+			stop = stop > _size ? _size: stop;
+			for(; l < stop; l++ )
+			{
+				if( i == l )
+					continue;
+				float distance = glm::distance( _positions[i], _positions[l] );
+				// Alignment
+				if( distance < 10.f )
+				{
+					alignment += directions[l];
+					alignment_count++;
+				}
+				// Cohesion
+				if( distance < 100.f )
+				{
+					cohesion += _positions[l];
+					cohesion_count++;
+				}
+				// Separation
+				if( distance < 2.f )
+				{
+					separation += _positions[l] - _positions[i];
+					separation_count++;
+				}
+			}
+			// Alignment
+			if( alignment_count )
+				directions[i] += glm::normalize( alignment / alignment_count ) * 0.005f;
+			// Cohesion
+			if( cohesion_count )
+			{
+				glm::vec3 t = cohesion / cohesion_count;
+				t = t - _positions[i];
+				if( L( t ) > 0.001f )
+				{
+					t = glm::normalize( t );
+					directions[i] += t * 0.0005f;
+				}
+			}
+			// Separation
+			if( separation_count )
+			{
+				glm::vec3 t = separation * -1.f / separation_count;
+				if( L( t ) > 0.001f )
+				{
+					t = glm::normalize( t );
+					directions[i] += t * 0.05f;
+				}
+			}
+
+
+			//directions[i] += glm::vec3( 0.f, -0.0001f, 0.f );
+			directions[i] = glm::normalize( directions[i] ) * 0.1f;
+			_positions[i] += directions[i];
+		}
+	}
+
+	glm::vec3 directions[fire_max_size];
+	std::mt19937 number_generator;
+	std::uniform_real_distribution<float> range;
+	glm::vec3 position;
+	int size;
 };
 
 

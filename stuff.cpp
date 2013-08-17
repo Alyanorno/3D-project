@@ -6,6 +6,7 @@ std::vector< Texture > textures;
 Model model;
 HeightMap height_map;
 ParticleSystem< 10000, Snow > snow;
+ParticleSystem< fire_max_size, Fire > fire;
 
 struct
 {
@@ -130,6 +131,11 @@ void Initialize( int argc, char** argv )
 
 	snow.Load();
 
+	fire.shader = snow.shader;
+	fire.position = glm::vec3( 50.f, 75.f, -50.f );
+
+	fire.Load();
+
 	textures.push_back( Texture() );
 	textures[0].LoadBmp( "bthBmp.bmp" );
 
@@ -137,7 +143,10 @@ void Initialize( int argc, char** argv )
 	textures[1].LoadBmp( "texture2.bmp" );
 
 	textures.push_back( Texture() );
-	textures[2].LoadBmp( "particle.bmp" );
+	textures[2].LoadBmp( "snow.bmp" );
+
+	textures.push_back( Texture() );
+	textures[3].LoadBmp( "fire.bmp" );
 
 
 	// Load sky box
@@ -219,6 +228,9 @@ void Update()
 {
 	snow.Emit( 1 );
 	snow.Update();
+
+	fire.Emit( 1 );
+	fire.Update();
 
 	// Input stuff
 	if( glfwGetKey( GLFW_KEY_ESC ) )
@@ -478,6 +490,29 @@ void Update()
 	glBindVertexArray( snow.Vao );
 
 	glDrawArrays( GL_POINTS, 0, snow.size );
+
+	glBindVertexArray( 0 );
+	glBindTexture( GL_TEXTURE_2D, 0 );
+	glUseProgram(0);
+
+	glDisableVertexAttribArray( 0 );
+
+
+	// Draw particle system Fire
+	glEnableVertexAttribArray( 0 );
+
+	glUseProgram( fire.shader );
+	glUniformMatrix4fv( glGetUniformLocation( fire.shader, "viewMatrix" ), 1, GL_FALSE, &viewMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( fire.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
+	glUniform1fv( glGetUniformLocation( fire.shader, "size"), 1, &snow.particle_size );
+
+	glUniform1i( glGetUniformLocation( fire.shader, "textureSampler" ), 0 );
+
+	glActiveTexture( GL_TEXTURE0 );
+	glBindTexture( GL_TEXTURE_2D, textures[3].gl );
+	glBindVertexArray( fire.Vao );
+
+	glDrawArrays( GL_POINTS, 0, fire.size );
 
 	glBindVertexArray( 0 );
 	glBindTexture( GL_TEXTURE_2D, 0 );
