@@ -148,6 +148,23 @@ void Initialize( int argc, char** argv )
 	textures.push_back( Texture() );
 	textures[3].LoadBmp( "fire.bmp" );
 
+	textures.push_back( Texture() );
+	textures[4].LoadBmp( "t1.bmp" );
+
+	textures.push_back( Texture() );
+	textures[5].LoadBmp( "t2.bmp" );
+
+	textures.push_back( Texture() );
+	textures[6].LoadBmp( "t3.bmp" );
+
+	textures.push_back( Texture() );
+	textures[7].LoadBmp( "t4.bmp" );
+
+	textures.push_back( Texture() );
+	textures[8].LoadBmp( "t5.bmp" );
+
+	textures.push_back( Texture() );
+	textures[9].LoadBmp( "t6.bmp" );
 
 	// Load sky box
 	skyBox.shader = CreateShader( "skyBox.vertex", "skyBox.fragment" );
@@ -348,10 +365,12 @@ void Update()
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	glm::vec3 eye( 0.f, 100.f, 0.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
-	glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( glm::vec4( eye, 1.f ) * viewMatrix ), centre, up );
+	glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( glm::vec4( eye, 1.f ) * glm::inverse( viewMatrix ) ), centre, up );
+	//glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * ( glm::lookAt( eye, centre, up ) * viewMatrix );
 
 	glEnableVertexAttribArray( 0 );
-	glCullFace( GL_FRONT_AND_BACK );
+	//glCullFace( GL_FRONT_AND_BACK );
+	glDisable( GL_CULL_FACE );
 
 	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
 	glUseProgram( shadow.shader );
@@ -371,6 +390,7 @@ void Update()
 	glUseProgram( 0 );
 	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
 
+	glEnable( GL_CULL_FACE );
 	glCullFace( GL_BACK );
 	glDisableVertexAttribArray( 0 );
 
@@ -453,7 +473,20 @@ void Update()
 	glUniform1i( glGetUniformLocation( height_map.shader, "shadowMap" ), 2 );
 
 	glActiveTexture( GL_TEXTURE0 + 0 );
-	glBindTexture( GL_TEXTURE_2D, textures[0].gl );
+
+	// 4-9
+	static int frame = 0;
+	const static int frame_speed = 30;
+	frame++;
+	if( frame/frame_speed > 10 )
+		frame = 0;
+	int t;
+	if( frame/frame_speed > 5 )
+		t = 9 - frame/frame_speed + 5;
+	else
+		t = 4 + frame/frame_speed;
+	glBindTexture( GL_TEXTURE_2D, textures[ t ].gl );
+
 	glActiveTexture( GL_TEXTURE0 + 1 );
 	glBindTexture( GL_TEXTURE_2D, textures[1].gl );
 	glActiveTexture( GL_TEXTURE0 + 2 );
