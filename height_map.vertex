@@ -1,7 +1,7 @@
 #version 330
 
 
-uniform mat4 modelViewMatrix;
+uniform mat4 viewMatrix;
 uniform mat3 normalInverseTranspose;
 uniform mat4 projectionMatrix;
 uniform mat4 shadowProjectionViewMatrix;
@@ -20,12 +20,12 @@ out vec3 textureBlending;
 
 void main()
 {
-	position = vec3( projectionMatrix * modelViewMatrix * vec4( _position, 1 ) );
+	position = vec3( projectionMatrix * viewMatrix * vec4( _position, 1 ) );
 	shadowCoordinate = shadowProjectionViewMatrix * vec4( _position, 1 );
 	normal = normalize( normalInverseTranspose * _normal );
 	textureCoordinate = _textureCoordinate;
 	textureBlending = _textureBlending;
 
-	gl_Position = projectionMatrix * modelViewMatrix * vec4( _position, 1.0 );
+	gl_Position = projectionMatrix * viewMatrix * vec4( _position, 1.0 );
 }
 

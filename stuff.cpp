@@ -24,7 +24,6 @@ struct
 	int size;
 } skyBox;
 
-
 GLuint restart_number = 100000;
 glm::vec3 translation( 0.f, 0.f, 0.f ), rotation( 0.f, 0.f, 0.f );
 
@@ -63,13 +62,14 @@ GLuint CreateShader( std::string vertex, std::string fragment, std::string geome
 }
 void Initialize( int argc, char** argv )
 {
-	glfwInit();
+	if( !glfwInit() )
+		throw std::string( "Failed to initialize glfw" );
 
 	glfwOpenWindowHint( GLFW_OPENGL_VERSION_MAJOR, 3 );
 	glfwOpenWindowHint( GLFW_OPENGL_VERSION_MINOR, 3 );
 	glfwOpenWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE );
 
-	glfwOpenWindow( 800, 600, 0, 0, 0, 0, 0, 0, GLFW_WINDOW );
+	glfwOpenWindow( 1600, 900, 0, 0, 0, 0, 0, 0, GLFW_WINDOW );
 
 	glewExperimental = GL_TRUE;
 	glewInit();
@@ -94,20 +94,29 @@ void Initialize( int argc, char** argv )
 	shadow.width = 1024;
 	shadow.height = 1024;
 
+	glGenTextures( 1, &shadow.texture );
+	glActiveTexture( GL_TEXTURE0 );
+	glBindTexture( GL_TEXTURE_2D, shadow.texture );
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadow.width, shadow.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+//	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+//	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+//	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+//	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+
+	GLfloat border_colour[] = { 1.f, 0.f, 0.f, 0.f };
+	glTexParameterfv( GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_colour );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LESS );
+
 	glGenFramebuffers( 1, &shadow.framebuffer );
 	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
-
 	glDrawBuffer( GL_NONE ); // No color
-
-	glGenTextures( 1, &shadow.texture );
-	glBindTexture( GL_TEXTURE_2D, shadow.texture );
-	glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadow.width, shadow.height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-
-	glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadow.texture, 0 );
+//	glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadow.texture, 0 );
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow.texture, 0 );
 
 	if( glCheckFramebufferStatus( GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE )
 		throw std::string( "Failed to initialize shadow map" );
@@ -277,7 +286,7 @@ void Update()
 	rotationMatrix = glm::rotate( rotationMatrix, rotation.y, glm::vec3( 0.f, 1.f, 0.f ) );
 	rotationMatrix = glm::rotate( rotationMatrix, rotation.z, glm::vec3( 0.f, 0.f, 1.f ) );
 
-	float speed = 0.2f;
+	float speed = 0.5f;
 	if( glfwGetKey('W') && glfwGetKey('S') )
 	{}
 	else if( glfwGetKey('W') )
@@ -360,59 +369,6 @@ void Update()
 	glm::mat4 viewMatrix( glm::mat4( 1.f ) );
 	viewMatrix = rotationMatrix * glm::translate( viewMatrix, translation );
 
-
-	// Draw to Shadow Map
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-
-	glm::vec3 eye( 0.f, 100.f, 0.f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 1.f, 0.f );
-	glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( glm::vec4( eye, 1.f ) * glm::inverse( viewMatrix ) ), centre, up );
-	//glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * ( glm::lookAt( eye, centre, up ) * viewMatrix );
-
-	glEnableVertexAttribArray( 0 );
-	//glCullFace( GL_FRONT_AND_BACK );
-	glDisable( GL_CULL_FACE );
-
-	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
-	glUseProgram( shadow.shader );
-
-	glUniformMatrix4fv( glGetUniformLocation( shadow.shader, "projectionViewMatrix" ), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
-
-	glBindVertexArray( model.Vao );
-	glDrawArrays( GL_TRIANGLES, 0, model.vertexs.size() );
-	glBindVertexArray( 0 );
-
-	glBindVertexArray( height_map.Vao );
-	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[4] );
-	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
-	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
-	glBindVertexArray( 0 );
-
-	glUseProgram( 0 );
-	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
-
-	glEnable( GL_CULL_FACE );
-	glCullFace( GL_BACK );
-	glDisableVertexAttribArray( 0 );
-
-
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-
-	// Move from [-1,1] -> [0,1]
-	shadowProjectionViewMatrix =  shadowProjectionViewMatrix * glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f );
-	// Move to camera space
-	shadowProjectionViewMatrix = glm::inverse( shadowProjectionViewMatrix ) * viewMatrix;
-	float nearClip = 1.0f, farClip = 1000.f, fovDeg = 45.f, aspect = (float)width / (float)height;
-	glm::mat4 modelViewMatrix;
-	glm::mat3 normalInverseTranspose;
-	glm::mat4 projectionMatrix = glm::perspective(fovDeg, aspect, nearClip, farClip);
-	glm::vec4 lightPosition = glm::vec4( 0.f, 300.f, 0.f, 1.f );
-
-
-	//Draw Model
-	glEnableVertexAttribArray( 0 );
-	glEnableVertexAttribArray( 1 );
-	glEnableVertexAttribArray( 2 );
-
 	static float angle = 45; // degres
 	angle += 0.1f;
 	if( angle > 360 )
@@ -421,11 +377,71 @@ void Update()
 	modelMatrix = glm::translate( modelMatrix, model.position );
 	modelMatrix = glm::rotate( modelMatrix, angle, glm::vec3( 0.f, 1.f, 0.f ) );
 
-	modelViewMatrix = viewMatrix * modelMatrix;
-	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
+
+	// Draw to Shadow Map
+	glBindFramebuffer( GL_FRAMEBUFFER, shadow.framebuffer );
+	glClear( GL_DEPTH_BUFFER_BIT );
+
+	glm::vec3 eye( 0.01f, 0.01f, 200.01f ), centre( 0.f, 0.f, 0.f ), up( 0.f, 0.f, 1.f );
+	//glm::mat4 shadowProjectionViewMatrix = glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 1000.f ) * glm::lookAt( glm::vec3( glm::vec4( eye, 1.f ) * glm::inverse( viewMatrix ) ), centre, up );
+	// Move from [-1,1] -> [0,1]
+//	shadowProjectionViewMatrix =  shadowProjectionViewMatrix * glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f );
+	// Move to camera space
+	//shadowProjectionViewMatrix = glm::inverse( shadowProjectionViewMatrix ) * projectionMatrix * viewMatrix;
+	glm::mat4 shadowProjectionViewMatrix = glm::mat4( 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.f, 0.f, 0.f, 0.5f, 0.f, 0.5f, 0.5f, 0.5f, 1.0f ) * glm::perspective( 45.f, (float)shadow.width / (float)shadow.height, 1.f, 500.f ) * glm::lookAt( eye, centre, up );
+
+	glViewport( 0, 0, shadow.width, shadow.height );
+	glEnableVertexAttribArray( 0 );
+	glCullFace( GL_FRONT );
+
+	glUseProgram( shadow.shader );
+
+	glUniformMatrix4fv( glGetUniformLocation( shadow.shader, "projectionViewMatrix" ), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
+
+	glBindVertexArray( height_map.Vao );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, height_map.Vbo[4] );
+	glDrawElements( GL_TRIANGLE_STRIP, height_map.indices.size(), GL_UNSIGNED_INT, 0 );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+	glBindVertexArray( 0 );
+
+	glm::mat4 temp = shadowProjectionViewMatrix * modelMatrix;
+	glUniformMatrix4fv( glGetUniformLocation( shadow.shader, "projectionViewMatrix" ), 1, GL_FALSE, &temp[0][0] );
+
+	glBindVertexArray( model.Vao );
+	glDrawArrays( GL_TRIANGLES, 0, model.vertexs.size() );
+	glBindVertexArray( 0 );
+
+	glUseProgram( 0 );
+
+	glCullFace( GL_BACK );
+	glDisableVertexAttribArray( 0 );
+
+	glFlush();
+	glFinish();
+
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+
+
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+	glViewport( 0, 0, width, height );
+	float nearClip = 1.0f, farClip = 1000.f, fovDeg = 45.f, aspect = (float)width / (float)height;
+	glm::mat4 modelViewMatrix;
+	glm::mat3 normalInverseTranspose;
+	glm::mat4 projectionMatrix = glm::perspective(fovDeg, aspect, nearClip, farClip);
+	glm::vec4 lightPosition = glm::vec4( 0.f, 200.f, 0.f, 1.f );
+
+
+	//Draw Model
+	glEnableVertexAttribArray( 0 );
+	glEnableVertexAttribArray( 1 );
+	glEnableVertexAttribArray( 2 );
+
+	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)viewMatrix * (glm::mat3)modelMatrix );
 
 	glUseProgram( model.shader );
-	glUniformMatrix4fv( glGetUniformLocation( model.shader, "modelViewMatrix" ), 1, GL_FALSE, &modelViewMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( model.shader, "modelMatrix" ), 1, GL_FALSE, &modelMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( model.shader, "viewMatrix" ), 1, GL_FALSE, &viewMatrix[0][0] );
 	glUniformMatrix3fv( glGetUniformLocation( model.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( model.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( model.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );
@@ -458,11 +474,10 @@ void Update()
 	glEnableVertexAttribArray( 2 );
 	glEnableVertexAttribArray( 3 );
 
-	modelViewMatrix = viewMatrix;
-	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)modelViewMatrix );
+	normalInverseTranspose = glm::inverseTranspose( (glm::mat3)viewMatrix );
 
 	glUseProgram( height_map.shader );
-	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "modelViewMatrix" ), 1, GL_FALSE, &modelViewMatrix[0][0] );
+	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "viewMatrix" ), 1, GL_FALSE, &viewMatrix[0][0] );
 	glUniformMatrix3fv( glGetUniformLocation( height_map.shader, "normalInverseTranspose"), 1, GL_FALSE, &normalInverseTranspose[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "projectionMatrix"), 1, GL_FALSE, &projectionMatrix[0][0] );
 	glUniformMatrix4fv( glGetUniformLocation( height_map.shader, "shadowProjectionViewMatrix"), 1, GL_FALSE, &shadowProjectionViewMatrix[0][0] );

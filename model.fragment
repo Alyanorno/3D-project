@@ -33,17 +33,20 @@ void main() {
 		specularLight = vec3( 0.0, 0.0, 0.0 );
 
 	// shadow
-	float visible = 1.0;
-	if( texture( shadowMap, (shadowCoordinate.xy / shadowCoordinate.w) ).z < shadowCoordinate.z / shadowCoordinate.w )
-//	if( texture( shadowMap, shadowCoordinate.xy ).z < shadowCoordinate.z )
-	{
-		visible = 0.5;
-	}
+	//float visible = 1.0;
+	//if( texture( shadowMap, (shadowCoordinate.xy / shadowCoordinate.w) ).z < shadowCoordinate.z / shadowCoordinate.w )
+	//if( textureProj( shadowMap, shadowCoordinate ) != 1 )
+	//{
+	//	visible = 0.5;
+	//}
 
 	float fogFactor = clamp( ( gl_FragCoord.z / gl_FragCoord.w ) / 1000.0, 0.0, 1.0 );
-	fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight), 1.0 );
-	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible, 1.0 );
-	//fragmentColour = texture( textureSampler, textureCoordinate ) * vec4( (ambientLight + diffuseLight + specularLight) * visible + glm::vec3( 1.0, 0.0, 0.0 ) * ( 1 - visible ), 1.0 );
+	fragmentColour = texture( textureSampler, textureCoordinate );
+	//if( visible == 0.5 )
+	//	fragmentColour = vec4( 1.0, 0.0, 0.0, 1.0 );
+	//else
+	//	fragmentColour = fragmentColour * vec4( (ambientLight + diffuseLight + specularLight) * visible, 1.0 );
+	fragmentColour = fragmentColour * vec4( ambientLight + diffuseLight + specularLight, 1.0 );
 	fragmentColour.xyz = fragmentColour.xyz * ( 1 - fogFactor ) + glm::vec3( 1.0, 1.0, 1.0 ) * fogFactor;
 }
 

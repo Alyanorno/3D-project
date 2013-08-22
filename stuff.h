@@ -168,7 +168,7 @@ struct Snow
 static const int fire_max_size = 1000;
 struct Fire
 {
-	Fire() : range( -1, 1 )
+	Fire() : range( -5, 5 )
 	{
 		std::random_device t;
 		number_generator.seed( t() );
@@ -176,7 +176,7 @@ struct Fire
 	glm::vec3 AddParticle( int _i, glm::vec3 _direction )
 	{
 		directions[_i] = glm::normalize( glm::vec3( range( number_generator ), range( number_generator ), range( number_generator ) ) ) / 10.f;
-		return position + glm::vec3( range( number_generator ), 0, range( number_generator ) );
+		return position + glm::vec3( range( number_generator ), range( number_generator ), range( number_generator ) );
 	}
 	float L( float x ) { return x > 0 ? x: -x; }
 	float L( glm::vec3 x ) { return glm::dot( x, x ); }
